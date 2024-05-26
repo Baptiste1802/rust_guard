@@ -8,14 +8,20 @@ use pnet::packet::tcp::TcpPacket;
 use pnet::packet::{self, Packet};
 use std::thread::sleep;
 use std::time::Duration;
+use std::thread;
+use std::sync::{Arc, Mutex};
+
+use crate::api::packet_map::{self, start_cleaner_thread};
 
 fn main() -> std::io::Result<()> {
 
-    let mut packet_map = api::packet_map::PacketMap::new();
+
+    let packet_map = Arc::new(Mutex::new(api::packet_map::PacketMap::new()));
+    let cleaner_thread = start_cleaner_thread(packet_map.clone());
 
     // return a vector with all newtork interfaces found
     let all_interfaces = interfaces();
-    
+
     // search for the default interface
     // up, not lootback and has an IP
     let default_interface = all_interfaces
@@ -43,8 +49,11 @@ fn main() -> std::io::Result<()> {
             Ok(packet) => {
                 if let Some(ethernet_packet) = EthernetPacket::new(packet) {
                     let packet_info = api::packet_infos::PacketInfos::new(&default_interface.name, &ethernet_packet);
-                    println!("{}", packet_info);
-                    packet_map.add_packet(packet_info);
+                    // println!("{}", packet_info);
+                    {
+                        let mut packet_map = packet_map.lock().unwrap();
+                        packet_map.add_packet(packet_info);
+                    }
                 }
             },
             Err(e) => {
@@ -52,12 +61,9 @@ fn main() -> std::io::Result<()> {
             }
         }
 
-        packet_map.cleanup_old_packets(60);
     };
 
 
-
-    Ok(())
 }
 
 

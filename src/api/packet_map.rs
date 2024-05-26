@@ -3,11 +3,13 @@ use std::time::{SystemTime, Duration};
 use uuid::{uuid, Uuid};
 use chrono::offset::Utc;
 use chrono::{DateTime, Local, TimeZone};
+use std::thread::{self, JoinHandle};
+use std::sync::{Arc, Mutex};
 
-use super::packet_infos::PacketInfos;
+use super::packet_infos::{self, PacketInfos};
 
 pub struct PacketMap {
-    packets: HashMap<Uuid, PacketInfos>
+    packets:  HashMap<Uuid, PacketInfos>,
 }
 
 impl PacketMap {
@@ -32,10 +34,12 @@ impl PacketMap {
         let datetime = datetime.with_timezone(&Local);
         println!("duration: {}", datetime.format("%d/%m/%Y %T"));
 
+
         let old_packets: Vec<Uuid> = self.packets.iter()
             .filter(|(_, packet)| packet.received_time() < &duration)
             .map(|(id, _)| *id)
             .collect();
+
         for id in old_packets {
             self.packets.remove(&id);
         }
@@ -48,11 +52,32 @@ impl PacketMap {
 }
 
 
+pub fn start_cleaner_thread(packet_map: Arc<Mutex<PacketMap>>) -> JoinHandle<()> {
+    thread::spawn(move || {
+        println!("thread starting");
+        loop {
+            {   
+                let mut packet_map = packet_map.lock().unwrap();
+                println!("-------------------- BEFORE --------------------");
+                println!("{}", packet_map);
+                println!("----------------------------------------");
+                println!("cleaning");
+                packet_map.cleanup_old_packets(60);
+                println!("-------------------- AFTER --------------------");
+                println!("{}", packet_map);
+                println!("----------------------------------------");
+            }
+            thread::sleep(Duration::from_secs(5));
+        }
+    })
+}
+
+
 use std::fmt;
 
 impl fmt::Display for PacketMap {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (uuid, packet_info) in &self.packets {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {        
+        for (uuid, packet_info) in self.packets.iter(){
             let datetime: DateTime<Utc> = (*packet_info.received_time()).into();
             let datetime = datetime.with_timezone(&Local);
             writeln!(f, "Packet ID: {}, {}", uuid, datetime.format("%d/%m/%Y %T"))?;
