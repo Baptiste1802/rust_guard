@@ -1,7 +1,8 @@
 use pnet::packet::{
-    arp::{ArpOperation, ArpOperations, ArpPacket}, ethernet::{EtherTypes, EthernetPacket}, ip::IpNextHeaderProtocol, ipv4::Ipv4Packet, ipv6::Ipv6Packet, Packet
+    arp::{Arp, ArpOperation, ArpOperations, ArpPacket}, ethernet::{EtherTypes, EthernetPacket}, ip::IpNextHeaderProtocol, ipv4::Ipv4Packet, ipv6::Ipv6Packet, Packet
 };
-use std::{process, fmt};
+use pnet::util::MacAddr;
+use std::{fmt, net::Ipv4Addr, process};
 
 pub enum Layer3Infos {
     IPV4(Ipv4Handler),
@@ -92,11 +93,11 @@ impl HandlePacket for Ipv6Handler {
 
 
 pub struct ArpHandler {
-    ip_source: String,
-    ip_destination: String,
-    hw_source: String,
-    hw_destination: String,
-    operation: ArpOperation,
+    pub ip_source: Ipv4Addr,
+    pub ip_destination: Ipv4Addr,
+    pub hw_source: MacAddr,
+    pub hw_destination: MacAddr,
+    pub operation: ArpOperation,
 }
 
 impl HandlePacket for ArpHandler {
@@ -107,10 +108,10 @@ impl HandlePacket for ArpHandler {
         });
 
         Layer3Infos::ARP(ArpHandler {
-            ip_source: arp_packet.get_sender_proto_addr().to_string(),
-            ip_destination: arp_packet.get_target_proto_addr().to_string(),
-            hw_source: arp_packet.get_sender_hw_addr().to_string(),
-            hw_destination: arp_packet.get_target_hw_addr().to_string(),
+            ip_source: arp_packet.get_sender_proto_addr(),
+            ip_destination: arp_packet.get_target_proto_addr(),
+            hw_source: arp_packet.get_sender_hw_addr(),
+            hw_destination: arp_packet.get_target_hw_addr(),
             operation: arp_packet.get_operation()
         })
     }

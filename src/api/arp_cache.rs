@@ -57,49 +57,31 @@ impl ArpCache{
 
     fn network_verification(&mut self, packet : &PacketInfos) -> Result<(),String>{
         //get subnet of network interface
-        let ip_network = self.interface.ips[0];
-
         match packet.get_layer_3_infos() {
-            Layer3Infos::ARP => {
-
-            },
-            _ => {println!("oui")}
-        }
-
-        match ip_network.is_ipv4(){
-            true =>{
-                match packet.operation{
-                    ArpOperations::Reply => {
-                        //ip valide
-                        if packet.sender_proto_addr.is_broadcast() || packet.sender_proto_addr.is_loopback(){
-                            return Err("Sender cannot be broadcast".to_string())
-                        }//ip dans le sous réseau
-                        else if Some(packet.sender_proto_addr).is_some() && ip_network.contains(IpAddr::from(packet.sender_proto_addr)){
-                            return Ok(())
+            Layer3Infos::ARP(arp_handler) => {
+                let ip_network = self.interface.ips[0];
+                if ip_network.is_ipv4(){
+                    
+                    match arp_handler.operation {
+                        ArpOperations::Reply => {
+                            //a faire
+                        }   
+                        ArpOperations::Request => {
+                            if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
+                                return Err("IP source cannot be broadcast adress".to_string())
+                            }
+                            else if !(ip_network.contains(IpAddr::from(arp_handler.ip_source))){
+                                return Err("Ip source not in subnet".to_string());
+                            }
+                            else{
+                                return Ok(())
+                            }
                         }
-                        else if Some(packet.sender_hw_addr).is_some() && !(packet.sender_hw_addr.is_broadcast() || packet.sender_hw_addr.is_local()){
-                            return Ok(())
-                        }  
-                        else {
-                            return Err("Network configuration problem".to_string())
-                        }
-                    }
-                    ArpOperations::Request => {
-                        Ok(())
                     }
                 }
-
-
-
-
-            }   
-            false =>{
-                return Err("No IPV6 in ARP protocol".to_string())
             }
+            _ => {return Err("Not an ARP packet".to_string())}
         }
-
-
-
     }
 
 
