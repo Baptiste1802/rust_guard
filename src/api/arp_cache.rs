@@ -46,13 +46,13 @@ impl ArpCache{
         self.cache.get(ip).map(|&(ref mac,_)|mac)
     }
 
-    pub fn process_packet(&mut self, ip : &Ipv4Addr, mac: &String) -> Option<&Ipv4Addr>{
-        // Si l'adresse ip correspond à l'adresse de broadcast -> arp request 
-        // Vérification de l'adresse IP conforme au sous réseau  -> arp request et reply
-        // Vérification adresse mac source dans le paquet Ethernet conforme à celle dans le paquet arp -> arp request et reply
-        // Ajout de le pair et vérification doublon -> Arp Reply
-        // Endpoint une adresse mac valide (pas broadcast par exemple) -> Arp Reply
-    }
+    // pub fn process_packet(&mut self, ip : &Ipv4Addr, mac: &String) -> Option<&Ipv4Addr>{
+    //     // Si l'adresse ip correspond à l'adresse de broadcast -> arp request 
+    //     // Vérification de l'adresse IP conforme au sous réseau  -> arp request et reply
+    //     // Vérification adresse mac source dans le paquet Ethernet conforme à celle dans le paquet arp -> arp request et reply
+    //     // Ajout de le pair et vérification doublon -> Arp Reply
+    //     // Endpoint une adresse mac valide (pas broadcast par exemple) -> Arp Reply
+    // }
 
     fn network_verification(&mut self, packet : &PacketInfos) -> Result<(),String>{
         //get subnet of network interface
@@ -106,19 +106,15 @@ impl ArpCache{
 
 #[cfg(test)]
 mod tests{
+    use super::*;
     use std::time::Duration;
 
     use pnet::{datalink::dummy::dummy_interface, packet::{arp::{ArpHardwareType, ArpHardwareTypes, ArpOperations, MutableArpPacket}, ethernet::{EtherTypes, EthernetPacket, MutableEthernetPacket}, Packet}};
     use crate::api::packet_infos::PacketInfos;
 
-    use super::ArpCache;
-
+    #[test]
     fn test_network_verification(){
-        let interface = dummy_interface(1);
         // Définissez les adresses MAC source et de destination
-        let source_mac = [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC];
-        let destination_mac = [0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED];
-
         let mut ethernet_buffer = [0u8; 42];
         let mut ethernet_packet = MutableEthernetPacket::new(&mut ethernet_buffer).unwrap();
         
@@ -143,9 +139,13 @@ mod tests{
         let mut ethernet_payload = ethernet_packet.set_payload(&arp_buffer);
 
 
-        let cache = ArpCache::new(Duration::new(50, 0), interface);
+        //cache arp
+        let interface = dummy_interface(1);
+        let mut cache = ArpCache::new(Duration::new(50, 0), interface);
         let interface_name = String::from("eth1");
         let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
-        
+
+
+        assert_eq!(cache.network_verification(&fake_paquet_info),Ok(()));
     }
 }
