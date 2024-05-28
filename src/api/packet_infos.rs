@@ -60,6 +60,11 @@ impl PacketInfos {
     pub fn received_time(&self) -> &SystemTime {
         &self.received_time
     }
+
+
+    pub fn get_layer_3_infos(&self) -> &Layer3Infos{
+        &self.layer_3_infos
+    }
 }
 
 use std::fmt;
