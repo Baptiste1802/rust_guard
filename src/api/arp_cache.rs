@@ -102,3 +102,50 @@ impl ArpCache{
 
     //pub fn verification
 }
+
+
+#[cfg(test)]
+mod tests{
+    use std::time::Duration;
+
+    use pnet::{datalink::dummy::dummy_interface, packet::{arp::{ArpHardwareType, ArpHardwareTypes, ArpOperations, MutableArpPacket}, ethernet::{EtherTypes, EthernetPacket, MutableEthernetPacket}, Packet}};
+    use crate::api::packet_infos::PacketInfos;
+
+    use super::ArpCache;
+
+    fn test_network_verification(){
+        let interface = dummy_interface(1);
+        // Définissez les adresses MAC source et de destination
+        let source_mac = [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC];
+        let destination_mac = [0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED];
+
+        let mut ethernet_buffer = [0u8; 42];
+        let mut ethernet_packet = MutableEthernetPacket::new(&mut ethernet_buffer).unwrap();
+        
+        ethernet_packet.set_destination([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF].into());
+        ethernet_packet.set_source([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC].into());
+        ethernet_packet.set_ethertype(EtherTypes::Arp);
+
+        let mut arp_buffer = [0u8,28];
+        let mut arp_packet = MutableArpPacket::new(&mut arp_buffer).unwrap();
+        arp_packet.set_hardware_type(ArpHardwareTypes::Ethernet);
+        arp_packet.set_protocol_type(EtherTypes::Ipv4); // IPv4
+        arp_packet.set_hw_addr_len(6);
+        arp_packet.set_proto_addr_len(4);
+        arp_packet.set_operation(ArpOperations::Request);
+        arp_packet.set_sender_hw_addr([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC].into());
+        arp_packet.set_sender_proto_addr([192, 168, 1, 1].into());
+        arp_packet.set_target_hw_addr([0; 6].into()); // Target MAC
+        arp_packet.set_target_proto_addr([192, 168, 1, 2].into()); // Target IP
+
+
+        //copy du paquet arp dans le payload du packet ethernet
+        let mut ethernet_payload = ethernet_packet.set_payload(&arp_buffer);
+
+
+        let cache = ArpCache::new(Duration::new(50, 0), interface);
+        let interface_name = String::from("eth1");
+        let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
+        
+    }
+}
