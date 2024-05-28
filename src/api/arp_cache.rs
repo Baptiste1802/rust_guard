@@ -47,7 +47,6 @@ impl ArpCache{
     }
 
     pub fn process_packet(&mut self, ip : &Ipv4Addr, mac: &String) -> Option<&Ipv4Addr>{
-        // Trop de demande arp provenant d'une IP -> arp request
         // Si l'adresse ip correspond à l'adresse de broadcast -> arp request 
         // Vérification de l'adresse IP conforme au sous réseau  -> arp request et reply
         // Vérification adresse mac source dans le paquet Ethernet conforme à celle dans le paquet arp -> arp request et reply
@@ -64,7 +63,15 @@ impl ArpCache{
                     
                     match arp_handler.operation {
                         ArpOperations::Reply => {
-                            //a faire
+                            if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
+                                return Err("IP source cannot be broadcast adress".to_string())
+                            }
+                            else if arp_handler.hw_source.is_broadcast() || arp_handler.hw_source.is_local(){
+                                return Err("handle alert".to_string())
+                            }
+                            else{
+                                return Ok(())
+                            }
                         }   
                         ArpOperations::Request => {
                             if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
@@ -77,7 +84,10 @@ impl ArpCache{
                                 return Ok(())
                             }
                         }
+                        _ => {return Err("ARP error".to_string())}
                     }
+                }else {
+                    return Err("Cannot use IPV6 address".to_string())
                 }
             }
             _ => {return Err("Not an ARP packet".to_string())}

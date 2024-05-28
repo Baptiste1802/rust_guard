@@ -65,6 +65,10 @@ impl PacketInfos {
     pub fn get_layer_3_infos(&self) -> &Layer3Infos{
         &self.layer_3_infos
     }
+
+    pub fn get_sender_hw_addr(&self) -> MacAddr{
+        self.mac_address_source
+    }
 }
 
 use std::fmt;
