@@ -60,7 +60,6 @@ impl ArpCache{
             Layer3Infos::ARP(arp_handler) => {
                 let ip_network = self.interface.ips[0];
                 if ip_network.is_ipv4(){
-                    
                     match arp_handler.operation {
                         ArpOperations::Reply => {
                             if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
@@ -79,6 +78,9 @@ impl ArpCache{
                             }
                             else if !(ip_network.contains(IpAddr::from(arp_handler.ip_source))){
                                 return Err("Ip source not in subnet".to_string());
+                            }
+                            else if !(arp_handler.hw_source.eq(packet.get_sender_hw_addr())){
+                                return Err("handle alert -> mac address Ip packet do not correspond to mac address ARP packet".to_string())
                             }
                             else{
                                 return Ok(())

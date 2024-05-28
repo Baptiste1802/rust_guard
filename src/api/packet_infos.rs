@@ -66,8 +66,8 @@ impl PacketInfos {
         &self.layer_3_infos
     }
 
-    pub fn get_sender_hw_addr(&self) -> MacAddr{
-        self.mac_address_source
+    pub fn get_sender_hw_addr(&self) -> &MacAddr{
+        &self.mac_address_source
     }
 }
 
