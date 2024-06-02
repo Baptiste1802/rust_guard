@@ -1,14 +1,14 @@
 use crate::api::layer_3::*;
 use crate::api::layer_4::*;
-use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::util::MacAddr;
-use pnet::packet::{
-    ethernet::{EthernetPacket, EtherTypes},
-    Packet,
-};
-use std::time::SystemTime;
 use chrono::offset::Utc;
 use chrono::{DateTime, Local, TimeZone};
+use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::{
+    ethernet::{EtherTypes, EthernetPacket},
+    Packet,
+};
+use pnet::util::MacAddr;
+use std::time::SystemTime;
 
 pub struct PacketInfos {
     received_time: SystemTime,
@@ -25,7 +25,7 @@ impl PacketInfos {
     // Constructor method to create a new PacketInfos object
     pub fn new(interface_name: &String, ethernet_packet: &EthernetPacket) -> PacketInfos {
         // Inside the constructor, we initialize the object's fields
-        
+
         let interface = interface_name.to_string();
         let mac_address_source = ethernet_packet.get_source();
         let mac_address_destination = ethernet_packet.get_destination();
@@ -44,7 +44,7 @@ impl PacketInfos {
             Some(_) => Some(String::from("Unknown")),
             None => None,
         };
-        
+
         PacketInfos {
             received_time: SystemTime::now(),
             mac_address_source,
@@ -61,12 +61,11 @@ impl PacketInfos {
         &self.received_time
     }
 
-
-    pub fn get_layer_3_infos(&self) -> &Layer3Infos{
+    pub fn get_layer_3_infos(&self) -> &Layer3Infos {
         &self.layer_3_infos
     }
 
-    pub fn get_sender_hw_addr(&self) -> &MacAddr{
+    pub fn get_sender_hw_addr(&self) -> &MacAddr {
         &self.mac_address_source
     }
 }
@@ -87,7 +86,7 @@ impl fmt::Display for PacketInfos {
         if let Some(layer_4_protocol) = self.layer_4_protocol.as_ref() {
             write!(f, "IpNextHeaderProtocol: {}\n", layer_4_protocol)?;
         }
-        
+
         if let Some(layer_4_infos) = self.layer_4_infos.as_ref() {
             write!(f, "{}\n", layer_4_infos)?;
         }
@@ -95,12 +94,13 @@ impl fmt::Display for PacketInfos {
     }
 }
 
-pub fn get_layer_3_infos(ethernet_packet: & EthernetPacket) -> Layer3Infos {
+pub fn get_layer_3_infos(ethernet_packet: &EthernetPacket) -> Layer3Infos {
     match ethernet_packet.get_ethertype() {
         EtherTypes::Ipv6 => Ipv6Handler::get_layer_3(ethernet_packet.payload()),
         EtherTypes::Ipv4 => Ipv4Handler::get_layer_3(ethernet_packet.payload()),
         EtherTypes::Arp => ArpHandler::get_layer_3(ethernet_packet.payload()),
-        _ => Layer3Infos::Default(UnsupportedProtocol::new(ethernet_packet.get_ethertype().to_string())),
+        _ => Layer3Infos::Default(UnsupportedProtocol::new(
+            ethernet_packet.get_ethertype().to_string(),
+        )),
     }
 }
-
