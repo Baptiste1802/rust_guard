@@ -59,36 +59,20 @@ impl ArpCache{
         match packet.get_layer_3_infos() {
             Layer3Infos::ARP(arp_handler) => {
                 let ip_network = self.interface;
-                match arp_handler.operation {
-                    ArpOperations::Reply => {
-                        if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
-                            return Err("IP source cannot be broadcast address".to_string())
-                        }
-                        else if !(ip_network.contains(arp_handler.ip_source)){
-                            return Err("Ip source not in subnet".to_string());
-                        }
-                        else if arp_handler.hw_source.is_broadcast() || arp_handler.hw_source.is_local(){
-                            return Err("handle alert".to_string())
-                        }
-                        else{
-                            return Ok(())
-                        }
-                    }   
-                    ArpOperations::Request => {
-                        if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
-                            return Err("IP source cannot be broadcast address".to_string())
-                        }
-                        else if !(ip_network.contains(arp_handler.ip_source)){
-                            return Err("Ip source not in subnet".to_string());
-                        }
-                        else if !(arp_handler.hw_source.eq(packet.get_sender_hw_addr())){
-                            return Err("handle alert -> mac address Ip packet do not correspond to mac address ARP packet".to_string())
-                        }
-                        else{
-                            return Ok(())
-                        }
-                    }
-                    _ => {return Err("ARP error".to_string())}
+                if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
+                    return Err("handle alert -> IP source not valid".to_string())
+                }
+                else if !(ip_network.contains(arp_handler.ip_source)){
+                    return Err("handle alert -> Ip source not in subnet".to_string());
+                }
+                else if (arp_handler.operation == ArpOperations::Request) && (arp_handler.hw_source.is_broadcast()){
+                    return Err("handle alert -> mac address not valid".to_string())
+                }
+                else if !(arp_handler.hw_source.eq(packet.get_sender_hw_addr())){
+                    return Err("handle alert -> mac address Ip packet do not correspond to mac address ARP packet".to_string())
+                }
+                else{
+                    return Ok(())
                 }
             }
             _ => {return Err("Not an ARP packet".to_string())}
@@ -181,7 +165,7 @@ mod tests{
     
     
             let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
-            assert_eq!(cache.network_verification(&fake_paquet_info),Err("IP source cannot be broadcast address".to_string()));
+            assert_eq!(cache.network_verification(&fake_paquet_info),Err("handle alert -> IP source not valid".to_string()));
         }
 
 
@@ -222,7 +206,7 @@ mod tests{
     
     
             let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
-            assert_eq!(cache.network_verification(&fake_paquet_info),Err("Ip source not in subnet".to_string()));
+            assert_eq!(cache.network_verification(&fake_paquet_info),Err("handle alert -> Ip source not in subnet".to_string()));
         }
         
 
