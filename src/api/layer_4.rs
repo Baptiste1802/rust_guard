@@ -1,9 +1,8 @@
+use pnet::packet::{ip::{IpNextHeaderProtocols, IpNextHeaderProtocol}, tcp::TcpPacket};
 use pnet::packet::udp::UdpPacket;
-use pnet::packet::{
-    ip::{IpNextHeaderProtocol, IpNextHeaderProtocols},
-    tcp::TcpPacket,
-};
-use std::{fmt, process};
+use std::{process, fmt};
+
+
 
 pub enum Layer4Infos {
     TCP(TcpHandler),
@@ -13,16 +12,16 @@ pub enum Layer4Infos {
 
 pub struct TcpHandler {
     port_source: String,
-    port_destination: String,
+    port_destination: String
 }
 
 pub struct UdpHandler {
     port_source: String,
-    port_destination: String,
+    port_destination: String
 }
 
 pub struct UnsupportedProtocol4 {
-    protocol: String,
+    protocol: String
 }
 
 impl UnsupportedProtocol4 {
@@ -36,9 +35,7 @@ impl fmt::Display for Layer4Infos {
         match self {
             Layer4Infos::TCP(tcp_packet) => write!(f, "{}", tcp_packet)?,
             Layer4Infos::UDP(udp_packet) => write!(f, "{}", udp_packet)?,
-            Layer4Infos::Default(unknown) => {
-                write!(f, "Unknown layer 4 protocol: {}", unknown.protocol)?
-            }
+            Layer4Infos::Default(unknown) => write!(f, "Unknown layer 4 protocol: {}", unknown.protocol)?,
         }
         Ok(())
     }
@@ -49,6 +46,7 @@ pub trait HandlePacket4 {
 }
 
 impl HandlePacket4 for TcpHandler {
+
     fn get_layer_4(data: &[u8]) -> Layer4Infos {
         let tcp_packet = TcpPacket::new(data).unwrap_or_else(|| {
             eprintln!("Invalid TCP packet");
@@ -64,16 +62,13 @@ impl HandlePacket4 for TcpHandler {
 
 impl fmt::Display for TcpHandler {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            " - PORTsrc: {}\n - PORTdst: {}\n",
-            self.port_source, self.port_destination
-        )?;
+        write!(f, " - PORTsrc: {}\n - PORTdst: {}\n", self.port_source, self.port_destination)?;
         Ok(())
     }
 }
 
 impl HandlePacket4 for UdpHandler {
+
     fn get_layer_4(data: &[u8]) -> Layer4Infos {
         let udp_packet = UdpPacket::new(data).unwrap_or_else(|| {
             eprintln!("Invalid UDP packet");
@@ -89,25 +84,19 @@ impl HandlePacket4 for UdpHandler {
 
 impl fmt::Display for UdpHandler {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            " - PORTsrc: {}\n - PORTdst: {}\n",
-            self.port_source, self.port_destination
-        )?;
+        write!(f, " - PORTsrc: {}\n - PORTdst: {}\n", self.port_source, self.port_destination)?;
         Ok(())
     }
 }
 
-pub fn get_layer_4_infos(
-    protocol: Option<IpNextHeaderProtocol>,
-    data: &[u8],
-) -> Option<Layer4Infos> {
+pub fn get_layer_4_infos(protocol: Option<IpNextHeaderProtocol>, data: &[u8]) -> Option<Layer4Infos> {
     match protocol {
         Some(IpNextHeaderProtocols::Tcp) => Some(TcpHandler::get_layer_4(data)),
         Some(IpNextHeaderProtocols::Udp) => Some(UdpHandler::get_layer_4(data)),
-        Some(_) => Some(Layer4Infos::Default(UnsupportedProtocol4::new(
-            "Unknown".to_string(),
-        ))),
+        Some(_) => Some(Layer4Infos::Default(UnsupportedProtocol4::new("Unknown".to_string()))),
         None => None,
     }
 }
+
+
+

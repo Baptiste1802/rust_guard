@@ -1,10 +1,5 @@
 use pnet::packet::{
-    arp::{Arp, ArpOperation, ArpOperations, ArpPacket},
-    ethernet::{EtherTypes, EthernetPacket},
-    ip::IpNextHeaderProtocol,
-    ipv4::Ipv4Packet,
-    ipv6::Ipv6Packet,
-    Packet,
+    arp::{Arp, ArpOperation, ArpOperations, ArpPacket}, ethernet::{EtherTypes, EthernetPacket}, ip::IpNextHeaderProtocol, ipv4::Ipv4Packet, ipv6::Ipv6Packet, Packet
 };
 use pnet::util::MacAddr;
 use std::{fmt, net::Ipv4Addr, process};
@@ -13,10 +8,10 @@ pub enum Layer3Infos {
     IPV4(Ipv4Handler),
     IPV6(Ipv6Handler),
     ARP(ArpHandler),
-    Default(UnsupportedProtocol),
+    Default(UnsupportedProtocol)
 }
 
-impl Layer3Infos {
+impl  Layer3Infos {
     pub fn get_next_level_protocol(&self) -> Option<IpNextHeaderProtocol> {
         match self {
             Layer3Infos::IPV4(ipv4_handler) => Some(ipv4_handler.next_protocol),
@@ -33,12 +28,10 @@ impl fmt::Display for Layer3Infos {
             Layer3Infos::ARP(arp) => write!(f, "{}", arp)?,
             Layer3Infos::IPV4(ipv4) => write!(f, "{}", ipv4)?,
             Layer3Infos::IPV6(ipv6) => write!(f, "{}", ipv6)?,
-            Layer3Infos::Default(unknown) => {
-                write!(f, "Unknown layer 3 protocol: {}\n", unknown.packet_type)?
-            }
+            Layer3Infos::Default(unknown) => write!(f, "Unknown layer 3 protocol: {}\n", unknown.packet_type)?,
         }
         Ok(())
-    }
+    }   
 }
 
 pub struct UnsupportedProtocol {
@@ -55,10 +48,11 @@ pub trait HandlePacket {
     fn get_layer_3(data: &[u8]) -> Layer3Infos;
 }
 
+
 pub struct Ipv4Handler {
     ip_source: String,
     ip_destination: String,
-    next_protocol: IpNextHeaderProtocol,
+    next_protocol: IpNextHeaderProtocol
 }
 
 impl HandlePacket for Ipv4Handler {
@@ -71,7 +65,7 @@ impl HandlePacket for Ipv4Handler {
         Layer3Infos::IPV4(Ipv4Handler {
             ip_source: ipv4_packet.get_source().to_string(),
             ip_destination: ipv4_packet.get_destination().to_string(),
-            next_protocol: ipv4_packet.get_next_level_protocol(),
+            next_protocol: ipv4_packet.get_next_level_protocol()
         })
     }
 }
@@ -79,7 +73,7 @@ impl HandlePacket for Ipv4Handler {
 pub struct Ipv6Handler {
     ip_source: String,
     ip_destination: String,
-    next_protocol: IpNextHeaderProtocol,
+    next_protocol: IpNextHeaderProtocol
 }
 
 impl HandlePacket for Ipv6Handler {
@@ -92,10 +86,11 @@ impl HandlePacket for Ipv6Handler {
         Layer3Infos::IPV6(Ipv6Handler {
             ip_source: ipv6_packet.get_source().to_string(),
             ip_destination: ipv6_packet.get_destination().to_string(),
-            next_protocol: ipv6_packet.get_next_header(),
+            next_protocol: ipv6_packet.get_next_header()
         })
     }
 }
+
 
 pub struct ArpHandler {
     pub ip_source: Ipv4Addr,
@@ -117,31 +112,23 @@ impl HandlePacket for ArpHandler {
             ip_destination: arp_packet.get_target_proto_addr(),
             hw_source: arp_packet.get_sender_hw_addr(),
             hw_destination: arp_packet.get_target_hw_addr(),
-            operation: arp_packet.get_operation(),
+            operation: arp_packet.get_operation()
         })
     }
 }
 
 impl fmt::Display for Ipv4Handler {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "- IPsrc: {}\n- IPdst: {}",
-            self.ip_source, self.ip_destination
-        )?;
+        write!(f, "- IPsrc: {}\n- IPdst: {}", self.ip_source, self.ip_destination)?;
         Ok(())
-    }
+    }   
 }
 
 impl fmt::Display for Ipv6Handler {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "- IPsrc: {}\n- IPdst: {}",
-            self.ip_source, self.ip_destination
-        )?;
+        write!(f, "- IPsrc: {}\n- IPdst: {}", self.ip_source, self.ip_destination)?;
         Ok(())
-    }
+    }   
 }
 
 impl fmt::Display for ArpHandler {
@@ -150,11 +137,12 @@ impl fmt::Display for ArpHandler {
             ArpOperations::Reply => write!(f, "- Operation is-at (reply)\n")?,
             ArpOperations::Request => write!(f, "- Operation who-as (request)\n")?,
             _ => write!(f, "- Unknown Operation\n")?,
-        }
-        write!(
-            f,
-            "- IPsrc: {}\n- IPdst: {}\n- MACsrc: {}\n- MACdst: {}",
-            self.ip_source, self.ip_destination, self.hw_source, self.hw_destination
+        }   
+        write!(f, "- IPsrc: {}\n- IPdst: {}\n- MACsrc: {}\n- MACdst: {}", 
+        self.ip_source,
+        self.ip_destination,
+        self.hw_source,
+        self.hw_destination 
         )?;
         Ok(())
     }
