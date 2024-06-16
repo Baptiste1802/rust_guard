@@ -18,7 +18,6 @@ struct Entry {
 
 impl PartialEq for Entry{
     fn eq(&self, other: &Self) -> bool{
-        print!("Equals : {}\n",self.ip == other.ip || self.mac == other.mac);
         self.ip == other.ip && self.mac == other.mac
     }
 }
@@ -58,11 +57,6 @@ impl ArpCache{
             timestamp,
         };
 
-        for entry in self.cache.iter(){
-            println!("{:?}",entry);
-        }
-
-        println!("new_value : {:?}",new_entry);
         if self.cache.iter().any(|e| e.ip == new_entry.ip || e.mac == new_entry.mac){
             Err("Handle error : k1 != k2 -> hash(k1) != hash(k2)".to_string())
         }
@@ -261,9 +255,5 @@ mod tests{
             let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
             assert_eq!(cache.network_verification(&fake_paquet_info),Err("handle alert -> Ip source not in subnet".to_string()));
         }
-        
-
-
-
     }
 }
