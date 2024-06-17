@@ -2,10 +2,12 @@ use crate::api::packet_infos::PacketInfos;
 use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::Ipv4Addr;
+use std::thread::sleep;
 use std::time::{Duration,Instant};
 use pnet::ipnetwork::Ipv4Network;
 use pnet::packet::arp::ArpOperations;
 use pnet::util::MacAddr;
+use uuid::NoContext;
 
 use super::layer_3::Layer3Infos;
 
@@ -27,7 +29,6 @@ impl Eq for Entry{}
 impl Hash for Entry{
     fn hash<H: Hasher>(&self, state : &mut H){
         self.ip.hash(state);
-        self.mac.hash(state);
     }
 }
 
@@ -68,12 +69,17 @@ impl ArpCache{
 
     pub fn cleanup(&mut self){
         let now = Instant::now();
-        self.cache.retain(|entry| now - entry.timestamp > self.ttl);
+        self.cache.retain(|entry| (now.duration_since(entry.timestamp) < self.ttl));
     }
 
-    pub fn get(&mut self, entry :&Entry) -> Option<&Entry>{
+    pub fn get_by_ip(&mut self, ip :Ipv4Addr) -> Option<&Entry>{
         self.cleanup();
-        self.cache.get(entry)
+        for entry in self.cache.iter(){
+            if entry.ip.eq(&ip){
+                return Some(entry)
+            }
+        }
+        None
     }
 
     // pub fn process_packet(&mut self, ip : &Ipv4Addr, mac: &String) -> Option<&Ipv4Addr>{
@@ -140,7 +146,21 @@ mod tests{
 
     }
 
+    #[test]
+    fn test_get_by_ip(){
+        let interface : Ipv4Network = "192.168.1.1/24".parse().unwrap();
+        let mut arp_cache = ArpCache::new(Duration::new(2, 0), interface);
+        let ip_to_test = Ipv4Addr::new(192, 168, 1, 10);
+        let mac_to_test  =  MacAddr::new(0x12, 0x34, 0x56, 0x78, 0x80, 0x80);
+        arp_cache.insert(ip_to_test, mac_to_test).unwrap();
+        let entry  = arp_cache.get_by_ip(ip_to_test);
 
+        assert!(entry.is_some());
+        let entry = entry.unwrap();
+        assert_eq!(entry.ip, ip_to_test);
+        assert_eq!(entry.mac,mac_to_test);
+
+    }
 
     #[test]
     fn test_arm_cache(){
@@ -148,13 +168,15 @@ mod tests{
 
         let mut arp_cache = ArpCache::new(Duration::new(10, 0), interface);
 
-
         let result1 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 2), MacAddr::new(0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC));
         let result2 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 3), MacAddr::new(0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC));
         let result3 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 2), MacAddr::new(0x12, 0x34, 0xFF, 0xFF, 0xFF, 0xFF));
         let result4 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 4), MacAddr::new(0x10, 0x10, 0x10, 0x10, 0x10, 0x10));
         let result5 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 5), MacAddr::new(0xFF, 0x10, 0x10, 0x14, 0x10, 0x10));
         
+
+       
+
         assert_eq!(result1,Ok(()));
         assert_eq!(result2, Err("Handle error : k1 != k2 -> hash(k1) != hash(k2)".to_string()));
         assert_eq!(result3, Err("Handle error : k1 != k2 -> hash(k1) != hash(k2)".to_string()));
