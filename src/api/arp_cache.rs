@@ -1,13 +1,13 @@
 use crate::api::packet_infos::PacketInfos;
+use core::fmt;
 use std::collections::HashSet;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 use std::net::Ipv4Addr;
-use std::thread::sleep;
 use std::time::{Duration,Instant};
 use pnet::ipnetwork::Ipv4Network;
 use pnet::packet::arp::ArpOperations;
 use pnet::util::MacAddr;
-use uuid::NoContext;
+use std::error::Error;
 
 use super::layer_3::Layer3Infos;
 
@@ -32,6 +32,25 @@ impl Hash for Entry{
     }
 }
 
+
+#[derive(Debug,PartialEq)]
+enum ArpCacheError{
+    NetworkError,
+    SpoofingAlert,
+}
+
+impl fmt::Display for ArpCacheError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result{
+        match *self{
+            ArpCacheError::NetworkError => write!(f,"Invalid parameters in ARP paquet"),
+            ArpCacheError::SpoofingAlert => write!(f,"Ip/Mac pair already exist in cache")
+        }
+    }
+}
+
+impl Error for ArpCacheError {}
+
+
 #[derive(Debug)]
 pub struct ArpCache{
     cache: HashSet<Entry>,
@@ -49,7 +68,7 @@ impl ArpCache{
         }
     }
 
-    pub fn insert(&mut self, ip : Ipv4Addr, mac: MacAddr) -> Result<(),String>{
+    pub fn insert(&mut self, ip : Ipv4Addr, mac: MacAddr) -> Result<(),ArpCacheError>{
         let timestamp = Instant::now();
         // let mut error = false;
         let new_entry : Entry = Entry {
@@ -59,7 +78,8 @@ impl ArpCache{
         };
 
         if self.cache.iter().any(|e| e.ip == new_entry.ip || e.mac == new_entry.mac){
-            Err("Handle error : k1 != k2 -> hash(k1) != hash(k2)".to_string())
+            println!("SpoofingAlert : Duplicated IP or MAC address detected, {}/{}",new_entry.ip, new_entry.mac);
+            Err(ArpCacheError::SpoofingAlert)
         }
         else{
             self.cache.insert(new_entry);
@@ -72,7 +92,7 @@ impl ArpCache{
         self.cache.retain(|entry| (now.duration_since(entry.timestamp) < self.ttl));
     }
 
-    pub fn get_by_ip(&mut self, ip :Ipv4Addr) -> Option<&Entry>{
+    fn get_by_ip(&mut self, ip :Ipv4Addr) -> Option<&Entry>{
         self.cleanup();
         for entry in self.cache.iter(){
             if entry.ip.eq(&ip){
@@ -89,28 +109,34 @@ impl ArpCache{
     //     // Ajout de le pair et vérification doublon -> Arp Reply
     //     // Endpoint une adresse mac valide (pas broadcast par exemple) -> Arp Reply
     // }
-    fn network_verification(&mut self, packet : &PacketInfos) -> Result<(),String>{
+    fn network_verification(&mut self, packet : &PacketInfos) -> Result<(),ArpCacheError>{
         //get subnet of network interface
         match packet.get_layer_3_infos() {
             Layer3Infos::ARP(arp_handler) => {
                 let ip_network = self.interface;
                 if arp_handler.ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
-                    return Err("handle alert -> IP source not valid".to_string())
+                    println!("NetworkError : invalid ip");
+                    return Err(ArpCacheError::NetworkError)
                 }
                 else if !(ip_network.contains(arp_handler.ip_source)){
-                    return Err("handle alert -> Ip source not in subnet".to_string());
+                    println!("NetworkError : handler not in subnet");
+                    return Err(ArpCacheError::NetworkError)
                 }
                 else if (arp_handler.operation == ArpOperations::Request) && (arp_handler.hw_source.is_broadcast()){
-                    return Err("handle alert -> mac address not valid".to_string())
+                    println!("NetworkError : invalid ip");
+                    return Err(ArpCacheError::NetworkError)
                 }
                 else if !(arp_handler.hw_source.eq(packet.get_sender_hw_addr())){
-                    return Err("handle alert -> mac address Ip packet do not correspond to mac address ARP packet".to_string())
+                    println!("NetworkError : Mac in Ethernet packet not equal to Mac in ARP packet");
+                    return Err(ArpCacheError::NetworkError)
                 }
                 else{
                     return Ok(())
                 }
             }
-            _ => {return Err("Not an ARP packet".to_string())}
+            _ => {
+                println!("NetworkError : fatal error");
+                return Err(ArpCacheError::NetworkError)}
         }
     }
 
@@ -173,13 +199,10 @@ mod tests{
         let result3 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 2), MacAddr::new(0x12, 0x34, 0xFF, 0xFF, 0xFF, 0xFF));
         let result4 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 4), MacAddr::new(0x10, 0x10, 0x10, 0x10, 0x10, 0x10));
         let result5 = arp_cache.insert(Ipv4Addr::new(192, 168, 1, 5), MacAddr::new(0xFF, 0x10, 0x10, 0x14, 0x10, 0x10));
-        
-
-       
 
         assert_eq!(result1,Ok(()));
-        assert_eq!(result2, Err("Handle error : k1 != k2 -> hash(k1) != hash(k2)".to_string()));
-        assert_eq!(result3, Err("Handle error : k1 != k2 -> hash(k1) != hash(k2)".to_string()));
+        assert_eq!(result2, Err(ArpCacheError::SpoofingAlert));
+        assert_eq!(result3, Err(ArpCacheError::SpoofingAlert));
         assert_eq!(result4, Ok(()));
         assert_eq!(result5, Ok(()));
     }
@@ -234,7 +257,7 @@ mod tests{
     
     
             let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
-            assert_eq!(cache.network_verification(&fake_paquet_info),Err("handle alert -> IP source not valid".to_string()));
+            assert_eq!(cache.network_verification(&fake_paquet_info),Err(ArpCacheError::NetworkError));
         }
 
 
@@ -255,7 +278,7 @@ mod tests{
     
     
             let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
-            assert_eq!(cache.network_verification(&fake_paquet_info),Err("handle alert -> mac address Ip packet do not correspond to mac address ARP packet".to_string()));
+            assert_eq!(cache.network_verification(&fake_paquet_info),Err(ArpCacheError::NetworkError));
         }
 
         {
@@ -275,7 +298,7 @@ mod tests{
     
     
             let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
-            assert_eq!(cache.network_verification(&fake_paquet_info),Err("handle alert -> Ip source not in subnet".to_string()));
+            assert_eq!(cache.network_verification(&fake_paquet_info),Err(ArpCacheError::NetworkError));
         }
     }
 }
