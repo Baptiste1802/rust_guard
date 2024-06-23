@@ -14,6 +14,7 @@ use super::layer_3::{self, EncapsulatedProtocolInfos, Layer3Infos};
 use super::packet_infos::{self, PacketInfos};
 
 pub struct PacketMapInfo {
+    pub ready: bool,
     pub number_of_packets: usize,
     pub protocols: HashMap<String, u64>,
     pub mac_srcs: HashMap<String, u64>,
@@ -22,12 +23,14 @@ pub struct PacketMapInfo {
     pub ip_dsts: HashMap<String, u64>,
     pub port_srcs: HashMap<String, u64>,
     pub port_dsts: HashMap<String, u64>,
-    pub tcp_flags: HashMap<Vec<String>, u64>
+    pub tcp_flags: HashMap<Vec<String>, u64>,
+    pub ip_src_port_dsts: HashMap<String, Vec<String>>,
 }
 
 impl PacketMapInfo {
     pub fn new() -> Self {
         PacketMapInfo {
+            ready: false,
             number_of_packets: 0,
             protocols: HashMap::new(),
             mac_srcs: HashMap::new(),
@@ -37,6 +40,7 @@ impl PacketMapInfo {
             port_srcs: HashMap::new(),
             port_dsts: HashMap::new(),
             tcp_flags: HashMap::new(),
+            ip_src_port_dsts: HashMap::new(),
         }
     }
     pub fn clear(&mut self) {
@@ -47,14 +51,28 @@ impl PacketMapInfo {
         self.ip_dsts.clear();
         self.port_srcs.clear();
         self.port_dsts.clear();
-        self.tcp_flags.clear()
+        self.tcp_flags.clear();
+        self.ip_src_port_dsts.clear();
     }
 
-    pub fn analyze(&self) {
+    pub fn analyze(&mut self) {
+        println!("analyze");
         if self.number_of_packets > 5000 {
             println!("DOS ATTACK RECOGNIZED : {}", self.number_of_packets);
         }
-        if self.
+
+        self.ip_src_port_dsts.iter().filter(|&(ip_src, port_dsts)| {
+            port_dsts.len() > 10
+        })
+        .for_each(|(ip_src, port_dsts)| {
+            println!("PORT SCAN RECOGNIZED FROM {}, {:?}", ip_src, port_dsts);
+        });
+
+        self.ready = false;
+    }
+
+    pub fn set_ready(&mut self) {
+        self.ready = true;
     }
 
 }
@@ -151,11 +169,15 @@ impl PacketMap {
             *packet_map_infos.mac_srcs.entry(packet.get_mac_source().to_string()).or_insert(0) += 1;
             *packet_map_infos.mac_dsts.entry(packet.get_mac_destination().to_string()).or_insert(0) += 1;
 
-            // 
+            // layer 3 
             *packet_map_infos.protocols.entry(packet.get_string_protocol_3().clone()).or_insert(0) += 1;
-            if let Some(ip_src) = packet.get_ip_src() {
+            
+            let ip_src = if let Some(ip_src) = packet.get_ip_src() {
                 *packet_map_infos.ip_srcs.entry(ip_src.clone()).or_insert(0) += 1;
-            }
+                Some(ip_src)
+            } else {
+                None
+            };
 
             if let Some(ip_dst) = packet.get_ip_dst() {
                 *packet_map_infos.ip_dsts.entry(ip_dst.clone()).or_insert(0) += 1;
@@ -169,7 +191,7 @@ impl PacketMap {
                 }
             }
 
-            // protocols
+            // layer 4
             else if let Some(protocol_4) = packet.get_string_protocol_4() {
                 *packet_map_infos.protocols.entry(protocol_4.clone()).or_insert(0) += 1;
                 if let Some(port_src) = packet.get_port_src() {
@@ -177,11 +199,22 @@ impl PacketMap {
                 }
                 if let Some(port_dst) = packet.get_port_dst() {
                     *packet_map_infos.port_dsts.entry(port_dst.clone()).or_insert(0) += 1;
+                    if let Some(ip_src) = ip_src {
+                        let vec = packet_map_infos.ip_src_port_dsts
+                            .entry(ip_src.clone())
+                            .or_insert_with(Vec::new);
+
+                        if !vec.contains(port_dst) {
+                            vec.push(port_dst.clone());
+                        }
+
+                    }
                 }
                 if let Some(tcp_flags) = packet.get_tcp_flags() {
                     *packet_map_infos.tcp_flags.entry(tcp_flags).or_insert(0) += 1;
                 }
             }
+            packet_map_infos.set_ready();
         }
     }
 
@@ -218,12 +251,18 @@ pub fn start_cleaner_thread(packet_map: Arc<Mutex<PacketMap>>, packet_map_infos:
     })
 }
 
-pub fn start_analyzer_thread(packet_map_infos: Arc<(Mutex<PacketMapInfo>>) -> JoinHandle<()> {
+pub fn start_analyzer_thread(packet_map_infos: Arc<(Mutex<PacketMapInfo>, Condvar)>) -> JoinHandle<()> {
     thread::spawn(move || {
         println!("analyzer thread starting");
+        let (packet_map_infos_mutex, condvar) = &*packet_map_infos;
         loop {
             {   
-                let packet_map_infos = packet_map_infos.lock().unwrap();
+                let mut packet_map_infos = packet_map_infos_mutex.lock().unwrap();
+                
+                while !packet_map_infos.ready {
+                    packet_map_infos = condvar.wait(packet_map_infos).unwrap();
+                }
+                
                 packet_map_infos.analyze();
             }
             thread::sleep(Duration::from_secs(5));
