@@ -24,7 +24,10 @@ pub struct PacketMapInfo {
     pub port_srcs: HashMap<String, u64>,
     pub port_dsts: HashMap<String, u64>,
     pub tcp_flags: HashMap<Vec<String>, u64>,
-    pub ip_src_port_dsts: HashMap<String, Vec<String>>,
+    pub ip_src_port_dsts: HashMap<String, Vec<String>>, // Port scanning
+    pub ip_dst_ip_srcs: HashMap<String, Vec<String>>, // DDOS
+    pub ip_dst_and_protocol: HashMap<(String, String), u64> // DOS
+    // stocker dans une struct ip _src ip_dst pour savoir quelle ip bannir
 }
 
 impl PacketMapInfo {
@@ -41,6 +44,8 @@ impl PacketMapInfo {
             port_dsts: HashMap::new(),
             tcp_flags: HashMap::new(),
             ip_src_port_dsts: HashMap::new(),
+            ip_dst_ip_srcs: HashMap::new(),
+            ip_dst_and_protocol: HashMap::new(),
         }
     }
     pub fn clear(&mut self) {
@@ -53,19 +58,58 @@ impl PacketMapInfo {
         self.port_dsts.clear();
         self.tcp_flags.clear();
         self.ip_src_port_dsts.clear();
+        self.ip_dst_ip_srcs.clear();
+        self.ip_dst_and_protocol.clear();
     }
 
     pub fn analyze(&mut self) {
-        println!("analyze");
-        if self.number_of_packets > 5000 {
-            println!("DOS ATTACK RECOGNIZED : {}", self.number_of_packets);
-        }
+        // if self.number_of_packets > 5000 {
+        //     println!("DOS ATTACK RECOGNIZED : {}", self.number_of_packets);
+        // }
 
-        self.ip_src_port_dsts.iter().filter(|&(ip_src, port_dsts)| {
+        self.ip_srcs.iter().filter(|&(_ip_src, counter)| {
+            *counter > 1000
+        })
+        .for_each(|(ip_src, counter)| {
+            println!("HOST {} SENDING A LARGE AMOUNT OF PACKETS [{} packets]", ip_src, counter);
+        });
+
+        self.ip_src_port_dsts.iter().filter(|&(_ip_src, port_dsts)| {
             port_dsts.len() > 10
         })
         .for_each(|(ip_src, port_dsts)| {
-            println!("PORT SCAN RECOGNIZED FROM {}, {:?}", ip_src, port_dsts);
+            println!("PORT SCAN RECOGNIZED FROM {} [{} ports scanned]\n{:?}", ip_src, port_dsts.len(), port_dsts);
+        });
+
+        self.ip_dst_ip_srcs.iter().filter(|&(_ip_dst, ip_srcs)| {
+            ip_srcs.len() > 10
+        })
+        .for_each(|(ip_dst, ip_srcs)| {
+            println!("DDOS ATTACK RECOGNIZED ON {}\nIP srcs {:?}", ip_dst, ip_srcs);
+        });
+
+        self.ip_dst_and_protocol.iter().filter(| &((_ip_dst, _protocol), counter) | {
+            *counter > 5000
+        })
+        .for_each(|((ip_dst, protocol), counter)| {
+            match protocol.as_str() {
+                "ICMP" => println!("ICMP FLOODING RECOGNIZED ON {} [{} packets]", ip_dst, counter),
+                "UDP" => println!("UDP DOS ATTACK RECOGNIZED ON {} [{} packets]", ip_dst, counter),
+                "TCP" => {
+                    self.tcp_flags
+                        .iter()
+                        .filter(|&(_vec, number)| *number > counter/4 )
+                        .for_each(|(flags, number)| {
+                            println!("TCP {} DOS ATTACK RECOGNIZED ON {} [{} packets]", flags.join(", "), ip_dst, number);
+                        });
+
+                    // if no match
+                    if self.tcp_flags.iter().all(|(_, &number)| number <= counter / 4) {
+                        println!("TCP DOS ATTACKS RECOGNIZED ON {}, UNKOWN METHOD [{} packets]", ip_dst, counter);
+                    }
+                }
+                _ => println!("DOS ATTACK RECOGNIZED ON {} USING {} [{} packets]", ip_dst, protocol, counter),            
+            }
         });
 
         self.ready = false;
@@ -159,6 +203,8 @@ impl PacketMap {
 
     pub fn get_statistics(&self, packet_map_infos: Arc<(Mutex<PacketMapInfo>, Condvar)>) {
 
+        // implémenter les détections layer 2
+
         let (mutex, _) = &*packet_map_infos;
         let mut packet_map_infos = mutex.lock().unwrap();
         packet_map_infos.number_of_packets = self.packets.len();
@@ -170,7 +216,8 @@ impl PacketMap {
             *packet_map_infos.mac_dsts.entry(packet.get_mac_destination().to_string()).or_insert(0) += 1;
 
             // layer 3 
-            *packet_map_infos.protocols.entry(packet.get_string_protocol_3().clone()).or_insert(0) += 1;
+            let protocol_3 = packet.get_string_protocol_3();
+            *packet_map_infos.protocols.entry(protocol_3.clone()).or_insert(0) += 1;
             
             let ip_src = if let Some(ip_src) = packet.get_ip_src() {
                 *packet_map_infos.ip_srcs.entry(ip_src.clone()).or_insert(0) += 1;
@@ -179,21 +226,51 @@ impl PacketMap {
                 None
             };
 
-            if let Some(ip_dst) = packet.get_ip_dst() {
+            let ip_dst = if let Some(ip_dst) = packet.get_ip_dst() {
                 *packet_map_infos.ip_dsts.entry(ip_dst.clone()).or_insert(0) += 1;
-            }
+                
+                // ip_dst : Vec<ip_src>
+                if let Some(ip_src) = ip_src {
+                    let vec = packet_map_infos.ip_dst_ip_srcs
+                        .entry(ip_dst.clone())
+                        .or_insert_with(Vec::new);
 
-            if let Some(encapsulated_protocol) = packet.get_layer_3_handler().get_encapsulated_infos() {
-                match encapsulated_protocol {
-                    EncapsulatedProtocolInfos::ICMP(icmp_packet) => {
-                        *packet_map_infos.protocols.entry("ICMP".to_string()).or_insert(0) += 1;
+                    if !vec.contains(ip_src) {
+                        vec.push(ip_src.clone());
                     }
                 }
+
+                Some(ip_dst)
+            } else {
+                None
+            };
+
+            if let Some(encapsulated_protocol) = packet.get_layer_3_handler().get_encapsulated_infos() {
+                
+                let protocol = match encapsulated_protocol {
+                    EncapsulatedProtocolInfos::ICMP(_icmp_packet) => {
+                        // TODO : handling ICMP type 
+                        *packet_map_infos.protocols.entry("ICMP".to_string()).or_insert(0) += 1;
+                        "ICMP".to_string()
+                    }
+                };
+
+                // (ip_dst, protocol) : counter
+                if let Some(ip_dst) = ip_dst {
+                    *packet_map_infos.ip_dst_and_protocol.entry((ip_dst.clone(), protocol)).or_insert(0) += 1;
+                }
+
             }
 
             // layer 4
             else if let Some(protocol_4) = packet.get_string_protocol_4() {
                 *packet_map_infos.protocols.entry(protocol_4.clone()).or_insert(0) += 1;
+                
+                // (ip_dst, protocol) : counter
+                if let Some(ip_dst) = ip_dst {
+                    *packet_map_infos.ip_dst_and_protocol.entry((ip_dst.clone(), protocol_4.clone())).or_insert(0) += 1;
+                }
+
                 if let Some(port_src) = packet.get_port_src() {
                     *packet_map_infos.port_srcs.entry(port_src.clone()).or_insert(0) += 1;
                 }
@@ -226,7 +303,7 @@ impl PacketMap {
 
 pub fn start_cleaner_thread(packet_map: Arc<Mutex<PacketMap>>, packet_map_infos: Arc<(Mutex<PacketMapInfo>, Condvar)>) -> JoinHandle<()> {
     thread::spawn(move || {
-        println!("thread starting");
+        println!("cleaner thread starting");
         loop {
             {   
                 let (packet_map_infos_mutex, condvar) = &*packet_map_infos;
@@ -237,16 +314,15 @@ pub fn start_cleaner_thread(packet_map: Arc<Mutex<PacketMap>>, packet_map_infos:
                 }
                 let mut packet_map = packet_map.lock().unwrap();
                 packet_map.get_statistics(packet_map_infos.clone());
-                {
-                    let packet_map_infos = packet_map_infos_mutex.lock().unwrap();
-                    // println!("{}", packet_map_infos);
-                }
-                condvar.notify_all();
-                packet_map.cleanup_old_packets(5);
+                // {
+                //     let packet_map_infos = packet_map_infos_mutex.lock().unwrap();
+                //     // println!("{}", packet_map_infos);
+                // }
+                packet_map.cleanup_old_packets(0);
                 // println!("{}", packet_map);
-
+                condvar.notify_all();
             }
-            thread::sleep(Duration::from_secs(5));
+            thread::sleep(Duration::from_secs(2));
         }
     })
 }
@@ -256,16 +332,13 @@ pub fn start_analyzer_thread(packet_map_infos: Arc<(Mutex<PacketMapInfo>, Condva
         println!("analyzer thread starting");
         let (packet_map_infos_mutex, condvar) = &*packet_map_infos;
         loop {
-            {   
+            { 
                 let mut packet_map_infos = packet_map_infos_mutex.lock().unwrap();
-                
                 while !packet_map_infos.ready {
-                    packet_map_infos = condvar.wait(packet_map_infos).unwrap();
+                packet_map_infos = condvar.wait(packet_map_infos).unwrap();
                 }
-                
                 packet_map_infos.analyze();
             }
-            thread::sleep(Duration::from_secs(5));
         }
     })
 }
