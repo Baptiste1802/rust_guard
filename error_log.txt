@@ -1,0 +1,3 @@
+[2024-06-24 07:54:12.299351260 +02:00] ARP cache -> Invalid Ip Source : "255.255.255.255"
+[2024-06-24 07:54:12.299324092 +02:00] ARP cache -> Duplicated IP or MAC address detected ("192.168.1.3"/"12:34:56:78:9a:bc")
+[2024-06-24 07:54:12.299478231 +02:00] ARP cache -> Duplicated IP or MAC address detected ("192.168.1.2"/"12:34:ff:ff:ff:ff")

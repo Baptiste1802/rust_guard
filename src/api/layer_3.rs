@@ -2,7 +2,8 @@ use pnet::packet::{
     arp::{Arp, ArpOperation, ArpOperations, ArpPacket}, ethernet::{EtherTypes, EthernetPacket}, ip::{IpNextHeaderProtocol, IpNextHeaderProtocols}, ipv4::{self, Ipv4Packet}, ipv6::Ipv6Packet, Packet
 };
 use pnet::packet::icmp::{Icmp, IcmpCode, IcmpPacket, IcmpType};
-use std::{process, fmt};
+use pnet::util::MacAddr;
+use std::{fmt, net::{IpAddr, Ipv4Addr, Ipv6Addr}, process};
 
 #[derive(Clone)]
 pub enum Layer3Infos {
@@ -29,7 +30,7 @@ impl Layer3Infos {
         }
     }
 
-    pub fn get_ip_src(&self) -> Option<&String> {
+    pub fn get_ip_src(&self) -> Option<&IpAddr> {
         match self {
             Layer3Infos::IPV4(ipv4_handler) => Some(ipv4_handler.get_ip_src()),
             Layer3Infos::IPV6(ipv6_handler) => Some(ipv6_handler.get_ip_src()),
@@ -38,7 +39,16 @@ impl Layer3Infos {
         }
     }
 
-    pub fn get_ip_dst(&self) -> Option<&String> {
+    pub fn get_ip_src_str(&self) -> Option<String> {
+        match self {
+            Layer3Infos::IPV4(ipv4_handler) => Some(ipv4_handler.get_ip_src().to_string()),
+            Layer3Infos::IPV6(ipv6_handler) => Some(ipv6_handler.get_ip_src().to_string()),
+            Layer3Infos::ARP(arp_handler) => Some(arp_handler.get_ip_src().to_string()),
+            Layer3Infos::Default(_) => None,
+        }
+    }
+
+    pub fn get_ip_dst(&self) -> Option<&IpAddr> {
         match self {
             Layer3Infos::IPV4(ipv4_handler) => Some(ipv4_handler.get_ip_dst()),
             Layer3Infos::IPV6(ipv6_handler) => Some(ipv6_handler.get_ip_dst()),
@@ -47,7 +57,16 @@ impl Layer3Infos {
         }
     }
 
-    pub fn get_arp_infos(&self) -> Option<(&String, &String, &String, &String, String)> {
+    pub fn get_ip_dst_str(&self) -> Option<String> {
+        match self {
+            Layer3Infos::IPV4(ipv4_handler) => Some(ipv4_handler.get_ip_dst().to_string()),
+            Layer3Infos::IPV6(ipv6_handler) => Some(ipv6_handler.get_ip_dst().to_string()),
+            Layer3Infos::ARP(arp_handler) => Some(arp_handler.get_ip_dst().to_string()),
+            Layer3Infos::Default(_) => None,
+        }
+    }
+
+    pub fn get_arp_infos(&self) -> Option<(&IpAddr, &IpAddr, &MacAddr, &MacAddr, String)> {
         // made in a hurry
         match self {
             Layer3Infos::ARP(arp_handler) => Some(arp_handler.get_informations()),
@@ -84,8 +103,8 @@ pub trait HandlePacket {
 }
 
 pub trait GetInformations {
-    fn get_ip_dst(&self) -> &String;
-    fn get_ip_src(&self) -> &String;
+    fn get_ip_dst(&self) -> &IpAddr;
+    fn get_ip_src(&self) -> &IpAddr;
     fn get_next_protocol(&self) -> Option<IpNextHeaderProtocol>;
     fn get_encapsulated_infos(&self) -> Option<&EncapsulatedProtocolInfos>;
 }
@@ -93,8 +112,8 @@ pub trait GetInformations {
 
 #[derive(Clone)]
 pub struct Ipv4Handler {
-    ip_source: String,
-    ip_destination: String,
+    ip_source: IpAddr,
+    ip_destination: IpAddr,
     next_protocol: IpNextHeaderProtocol,
     encapsulated_packet: Option<EncapsulatedProtocolInfos>,
 }
@@ -109,8 +128,8 @@ impl HandlePacket for Ipv4Handler {
         let protocol = ipv4_packet.get_next_level_protocol();        
 
         let layer_3_infos = Layer3Infos::IPV4(Ipv4Handler {
-            ip_source: ipv4_packet.get_source().to_string(),
-            ip_destination: ipv4_packet.get_destination().to_string(),
+            ip_source: IpAddr::V4(ipv4_packet.get_source()),
+            ip_destination: IpAddr::V4(ipv4_packet.get_destination()),
             next_protocol: protocol,
             encapsulated_packet: extract_encapsalted_protocol(protocol, data)
         });
@@ -119,11 +138,11 @@ impl HandlePacket for Ipv4Handler {
 }
 
 impl GetInformations for Ipv4Handler {
-    fn get_ip_src(&self) -> &String {
+    fn get_ip_src(&self) -> &IpAddr {
         &self.ip_source
     }
 
-    fn get_ip_dst(&self) -> &String {
+    fn get_ip_dst(&self) -> &IpAddr {
         &self.ip_destination
     }
 
@@ -149,8 +168,8 @@ impl GetInformations for Ipv4Handler {
 
 #[derive(Clone)]
 pub struct Ipv6Handler {
-    ip_source: String,
-    ip_destination: String,
+    ip_source: IpAddr,
+    ip_destination: IpAddr,
     next_protocol: IpNextHeaderProtocol
 }
 
@@ -162,41 +181,41 @@ impl HandlePacket for Ipv6Handler {
         });
 
         let layer_3_infos = Layer3Infos::IPV6(Ipv6Handler {
-            ip_source: ipv6_packet.get_source().to_string(),
-            ip_destination: ipv6_packet.get_destination().to_string(),
+            ip_source: IpAddr::V6(ipv6_packet.get_source()),
+            ip_destination: IpAddr::V6(ipv6_packet.get_destination()),
             next_protocol: ipv6_packet.get_next_header()
         });
 
         (Some(ipv6_packet.payload().to_vec()), layer_3_infos)
     }
+
 }
 
 impl GetInformations for Ipv6Handler {
-    fn get_ip_src(&self) -> &String {
+    fn get_ip_src(&self) -> &IpAddr {
         &self.ip_source
     }
 
-    fn get_ip_dst(&self) -> &String {
+    fn get_ip_dst(&self) -> &IpAddr {
         &self.ip_destination
     }
 
     fn get_next_protocol(&self) -> Option<IpNextHeaderProtocol> {
         Some(self.next_protocol)
     }
-
-    fn get_encapsulated_infos(&self) -> Option<(&EncapsulatedProtocolInfos)> {
+    
+    fn get_encapsulated_infos(&self) -> Option<&EncapsulatedProtocolInfos> {
         None
     }
-    
 }
 
 #[derive(Clone)]
 pub struct ArpHandler {
-    ip_source: String,
-    ip_destination: String,
-    hw_source: String,
-    hw_destination: String,
-    operation: ArpOperation,
+    pub ip_source: IpAddr,
+    pub ip_destination: IpAddr,
+    pub hw_source: MacAddr,
+    pub hw_destination: MacAddr,
+    pub operation: ArpOperation,
 }
 
 impl HandlePacket for ArpHandler {
@@ -207,10 +226,10 @@ impl HandlePacket for ArpHandler {
         });
 
         let layer_3_infos = Layer3Infos::ARP(ArpHandler {
-            ip_source: arp_packet.get_sender_proto_addr().to_string(),
-            ip_destination: arp_packet.get_target_proto_addr().to_string(),
-            hw_source: arp_packet.get_sender_hw_addr().to_string(),
-            hw_destination: arp_packet.get_target_hw_addr().to_string(),
+            ip_source: IpAddr::V4(arp_packet.get_sender_proto_addr()),
+            ip_destination: IpAddr::V4(arp_packet.get_target_proto_addr()),
+            hw_source: arp_packet.get_sender_hw_addr(),
+            hw_destination: arp_packet.get_target_hw_addr(),
             operation: arp_packet.get_operation()
         });
 
@@ -227,25 +246,25 @@ impl ArpHandler {
             _ => "unknown".to_string(),
         }
     }
-    pub fn get_informations(&self) -> (&String, &String, &String, &String, String){
+    pub fn get_informations(&self) -> (&IpAddr, &IpAddr, &MacAddr, &MacAddr, String){
         (&self.ip_source, &self.ip_destination, &self.hw_source, &self.hw_destination, self.operation_to_str())
     }
 }
 
 impl GetInformations for ArpHandler {
-    fn get_ip_src(&self) -> &String {
+    fn get_ip_src(&self) -> &IpAddr {
         &self.ip_source
     }
 
-    fn get_ip_dst(&self) -> &String {
+    fn get_ip_dst(&self) -> &IpAddr {
         &self.ip_destination
     }
 
-    fn get_next_protocol(&self) -> Option<IpNextHeaderProtocol> {
+    fn get_encapsulated_infos(&self) -> Option<&EncapsulatedProtocolInfos> {
         None
     }
 
-    fn get_encapsulated_infos(&self) -> Option<(&EncapsulatedProtocolInfos)> {
+    fn get_next_protocol(&self) -> Option<IpNextHeaderProtocol> {
         None
     }
 }

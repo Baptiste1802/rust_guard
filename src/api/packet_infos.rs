@@ -7,9 +7,11 @@ use pnet::packet::{
     ethernet::{EthernetPacket, EtherTypes},
     Packet,
 };
+use std::net::IpAddr;
 use std::time::SystemTime;
 use chrono::offset::Utc;
 use chrono::{DateTime, Local, TimeZone};
+
 
 #[derive(Clone)]
 pub struct PacketInfos {
@@ -84,12 +86,20 @@ impl PacketInfos {
         &self.layer_3_infos
     }
 
-    pub fn get_ip_src(&self) -> Option<&String> {
+    pub fn get_ip_src(&self) -> Option<&IpAddr> {
         self.layer_3_infos.get_ip_src()
     }
 
-    pub fn get_ip_dst(&self) -> Option<&String> {
+    pub fn get_ip_dst(&self) -> Option<&IpAddr> {
         self.layer_3_infos.get_ip_dst()
+    }
+
+    pub fn get_ip_src_str(&self) -> Option<String> {
+        self.layer_3_infos.get_ip_src_str()
+    }
+
+    pub fn get_ip_dst_str(&self) -> Option<String> {
+        self.layer_3_infos.get_ip_dst_str()
     }
 
     pub fn get_string_protocol_4(&self) -> &Option<String> {

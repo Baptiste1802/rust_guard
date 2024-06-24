@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::iter::Map;
+use std::net::IpAddr;
 use std::time::{SystemTime, Duration};
 use pnet::packet::arp::ArpOperation;
 use uuid::{uuid, Uuid};
@@ -233,30 +234,30 @@ impl PacketMap {
             let protocol_3 = packet.get_string_protocol_3();
             if protocol_3.to_string() == "Arp" {
                 // made in a hurry
-                if let Some((ip_src, ip_dst, hw_src, hw_dst, operation)) = packet.get_layer_3_handler().get_arp_infos() {
-                    *packet_map_infos.arps.entry((ip_src.clone(), operation.to_string()))
+                if let Some((ip_src, _ip_dst, _hw_src, _hw_dst, operation)) = packet.get_layer_3_handler().get_arp_infos() {
+                    *packet_map_infos.arps.entry((ip_src.to_string(), operation.to_string()))
                         .or_insert(0) += 1;
                 }
             }
             *packet_map_infos.protocols.entry(protocol_3.clone()).or_insert(0) += 1;
             
-            let ip_src = if let Some(ip_src) = packet.get_ip_src() {
+            let ip_src = if let Some(ip_src) = packet.get_ip_src_str() {
                 *packet_map_infos.ip_srcs.entry(ip_src.clone()).or_insert(0) += 1;
                 Some(ip_src)
             } else {
                 None
             };
 
-            let ip_dst = if let Some(ip_dst) = packet.get_ip_dst() {
+            let ip_dst = if let Some(ip_dst) = packet.get_ip_dst_str() {
                 *packet_map_infos.ip_dsts.entry(ip_dst.clone()).or_insert(0) += 1;
                 
                 // ip_dst : Vec<ip_src>
-                if let Some(ip_src) = ip_src {
+                if let Some(ip_src) = ip_src.clone() {
                     let vec = packet_map_infos.ip_dst_ip_srcs
                         .entry(ip_dst.clone())
                         .or_insert_with(Vec::new);
 
-                    if !vec.contains(ip_src) {
+                    if !vec.contains(&ip_src) {
                         vec.push(ip_src.clone());
                     }
                 }
@@ -297,7 +298,7 @@ impl PacketMap {
                 }
                 if let Some(port_dst) = packet.get_port_dst() {
                     *packet_map_infos.port_dsts.entry(port_dst.clone()).or_insert(0) += 1;
-                    if let Some(ip_src) = ip_src {
+                    if let Some(ip_src) = ip_src.clone() {
                         let vec = packet_map_infos.ip_src_port_dsts
                             .entry(ip_src.clone())
                             .or_insert_with(Vec::new);
