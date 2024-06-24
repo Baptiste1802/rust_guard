@@ -16,7 +16,7 @@ pub enum ArpCacheError{
     HwBroadError{
         mac : String,
     },
-    #[error("ARP cache -> MacAddr in ehternet packet do not correspond to MacAddr in ARP paclet : {macEther:?} != {macARP:?}")]
+    #[error("ARP cache -> MacAddr in ethernet packet do not correspond to MacAddr in ARP packet : {macEther:?} != {macARP:?}")]
     HwEtherArpError{
         macEther: String,
         macARP: String,
