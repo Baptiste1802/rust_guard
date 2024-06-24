@@ -1,4 +1,5 @@
 mod api;
+use api::arp_cache::ArpCache;
 use api::packet_infos::PacketInfos;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::{self, interfaces};
@@ -85,6 +86,8 @@ fn main() -> std::io::Result<()> {
             Ok(packet) => {
                 if let Some(ethernet_packet) = EthernetPacket::new(packet) {
                     let packet_info: PacketInfos = api::packet_infos::PacketInfos::new(&default_interface.name, &ethernet_packet);
+                    let mut cache_arp = ArpCache::new(Duration::new(10, 0),default_interface);
+                    cache_arp.network_verification(&packet_info);
                     // println!("{}", packet_info);
                     // println!("PACKET RECEIPT {}", i);
                     sender.send((packet_info.clone(), i));

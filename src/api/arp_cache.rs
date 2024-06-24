@@ -6,8 +6,10 @@ use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::{Duration,Instant};
 use pnet::ipnetwork::Ipv4Network;
+use pnet::ipnetwork::IpNetwork;
 use pnet::packet::arp::ArpOperations;
 use pnet::util::MacAddr;
+use pnet::datalink::NetworkInterface;
 use super::errors::ArpCacheError;
 
 use super::layer_3::{GetInformations, Layer3Infos};
@@ -39,15 +41,22 @@ pub struct ArpCache{
     cache: HashSet<Entry>,
     ttl: Duration,
     interface : Ipv4Network,
+    interface_name : String,
 }
 
 impl ArpCache{
 
-    pub fn new(ttl: Duration, interface : Ipv4Network) -> Self {
+    pub fn new(ttl: Duration, interface : &NetworkInterface) -> Self {
+        let inter = match interface.ips.get(0){
+            Some(IpNetwork::V4(ipv4)) => Some(*ipv4),
+            _ => None,
+        };
+
         ArpCache{
             cache : HashSet::new(),
-            ttl : ttl,
-            interface : interface,
+            ttl,
+            interface: inter.unwrap(),
+            interface_name : interface.name.clone(),
         }
     }
 
@@ -78,7 +87,7 @@ impl ArpCache{
     pub fn to_string(&mut self){
         for entry in self.cache.iter(){
             println!(
-                "({}) at ({}) on {} interface", entry.ip.to_string(),entry.mac.to_string(), self.interface.to_string()
+                "({}) at ({}) on {}", entry.ip.to_string(),entry.mac.to_string(), self.interface_name
             );
         }
     }
@@ -105,7 +114,7 @@ impl ArpCache{
     //     // Ajout de le pair et vérification doublon -> Arp Reply
     //     // Endpoint une adresse mac valide (pas broadcast par exemple) -> Arp Reply
     // }
-    fn network_verification(&mut self, packet : &PacketInfos) -> Result<(),ArpCacheError>{
+    pub fn network_verification(&mut self, packet : &PacketInfos) -> Result<(),ArpCacheError>{
         match packet.get_layer_3_handler(){
             Layer3Infos::ARP(arp_handler) => {
                 let ip_network = self.interface;
@@ -136,21 +145,17 @@ impl ArpCache{
                         errors::log_error(&err);
                         return Err(err)
                     } else{
-                        if (arp_handler.operation == ArpOperations::Reply){
-                            match arp_handler.get_ip_src(){
-                                IpAddr::V4(ipv4) => {
-                                    let result = self.insert(*ipv4, arp_handler.hw_source);
-                                    return result
-                                }
-                                IpAddr::V6(_) =>{
-                                    println!("NetworkError: IP source is not IPv4");
-                                    let err: ArpCacheError = ArpCacheError::InvalidIpSource {
-                                        ip_source: arp_handler.ip_source.to_string(),
-                                    };
-                                }
+                        match arp_handler.get_ip_src(){
+                            IpAddr::V4(ipv4) => {
+                                let result = self.insert(*ipv4, arp_handler.hw_source);
+                                return result
                             }
-
-
+                            IpAddr::V6(_) =>{
+                                println!("NetworkError: IP source is not IPv4");
+                                let err: ArpCacheError = ArpCacheError::InvalidIpSource {
+                                    ip_source: arp_handler.ip_source.to_string(),
+                                };
+                            }
                         }
                         return Ok(())
                     }
@@ -163,12 +168,9 @@ impl ArpCache{
                     errors::log_error(&err);
                     return Err(err);
                 }
-
             }
             _ => {
-                println!("NetworkError : fatal error");
                 let err = ArpCacheError::NetworkError;
-                errors::log_error(&err);
                 return Err(err)
             }
         }
@@ -186,7 +188,6 @@ mod tests{
     use std::time::Duration;
     use pnet::{packet::{arp::{ArpHardwareTypes, ArpOperations, MutableArpPacket}, ethernet::{EtherTypes, MutableEthernetPacket}}, util::MacAddr};
     use crate::api::packet_infos::PacketInfos;
-
 
     fn paquet_generator<'a>(ether_mac_source : MacAddr,arp_mac_source : MacAddr,  mac_dest : MacAddr , ip_source : Ipv4Addr, ip_dest : Ipv4Addr,  ethernet_packet : &mut MutableEthernetPacket,  arp_packet : &mut MutableArpPacket){
 
@@ -208,8 +209,22 @@ mod tests{
 
     #[test]
     fn test_get_by_ip(){
-        let interface : Ipv4Network = "192.168.1.1/24".parse().unwrap();
-        let mut arp_cache = ArpCache::new(Duration::new(2, 0), interface);
+        let all_interfaces = interfaces();
+
+        // search for the default interface
+        // up, not lootback and has an IP
+        let default_interface = all_interfaces
+            .iter()
+            .find(|e| e.is_up() && !e.is_loopback() && !e.ips.is_empty());
+    
+        let default_interface = match default_interface {
+            Some(interface) => interface,
+            None => {
+                println!("Error while finding the default interface.");
+                std::process::exit(1);
+            }
+        };
+        let mut arp_cache = ArpCache::new(Duration::new(2, 0), default_interface);
         let ip_to_test = Ipv4Addr::new(192, 168, 1, 10);
         let mac_to_test  =  MacAddr::new(0x12, 0x34, 0x56, 0x78, 0x80, 0x80);
         arp_cache.insert(ip_to_test, mac_to_test).unwrap();
