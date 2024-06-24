@@ -1,32 +1,32 @@
-use std::fmt;
+use std::{fmt, fs::OpenOptions, io::Write};
 use thiserror::Error;
 use chrono;
-
+use std::error::Error;
 #[derive(Error,Debug,PartialEq)]
 pub enum ArpCacheError{
-    #[error("Invalid Ip Source : {ip_source:?}")]
+    #[error("ARP cache -> Invalid Ip Source : {ip_source:?}")]
     InvalidIpSource{
         ip_source: String,
     },
-    #[error("IP not in subnet : {ip:?}")]
+    #[error("ARP cache -> IP not in subnet : {ip:?}")]
     SubnetError{
         ip : String,
     },
-    #[error("MacAddr source is broadcast : {mac:?}")]
+    #[error("ARP cache -> MacAddr source is broadcast : {mac:?}")]
     HwBroadError{
         mac : String,
     },
-    #[error("MacAddr in ehternet packet do not correspond to MacAddr in ARP paclet : {macEther:?} != {macARP:?}")]
+    #[error("ARP cache -> MacAddr in ehternet packet do not correspond to MacAddr in ARP paclet : {macEther:?} != {macARP:?}")]
     HwEtherArpError{
         macEther: String,
         macARP: String,
     },
-    #[error("Duplicated IP or MAC address detected ({ip:?}/{mac:?})")]
+    #[error("ARP cache -> Duplicated IP or MAC address detected ({ip:?}/{mac:?})")]
     SpoofingAlert{
         ip: String,
         mac : String,
     },
-    #[error("Fatal network error")]
+    #[error("ARP cache -> Fatal network error")]
     NetworkError,
 }
 
@@ -42,10 +42,18 @@ pub enum ArpCacheError{
 
 
 
-pub fn log_error(err : dyn Error){
+pub fn log_error(err : &dyn Error){
     let date_time = chrono::offset::Local::now();
-   
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("error_log.txt")
+        .expect("Unable to open or create log file");
+
+    let log_entry = format!("[{}] {}\n", date_time, err);
+
+    file .write_all(log_entry.as_bytes()).expect("Unable to write to log file");
+
+
     
-
-
 }
