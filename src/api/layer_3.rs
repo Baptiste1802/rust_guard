@@ -46,6 +46,14 @@ impl Layer3Infos {
             Layer3Infos::Default(_) => None,
         }
     }
+
+    pub fn get_arp_infos(&self) -> Option<(&String, &String, &String, &String, String)> {
+        // made in a hurry
+        match self {
+            Layer3Infos::ARP(arp_handler) => Some(arp_handler.get_informations()),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Layer3Infos {
@@ -207,6 +215,20 @@ impl HandlePacket for ArpHandler {
         });
 
         (None, layer_3_infos)
+    }
+}
+
+impl ArpHandler {
+
+    pub fn operation_to_str(&self) -> String{
+        match self.operation {
+            ArpOperations::Reply => "is-at".to_string(),
+            ArpOperations::Request => "who-has".to_string(),
+            _ => "unknown".to_string(),
+        }
+    }
+    pub fn get_informations(&self) -> (&String, &String, &String, &String, String){
+        (&self.ip_source, &self.ip_destination, &self.hw_source, &self.hw_destination, self.operation_to_str())
     }
 }
 

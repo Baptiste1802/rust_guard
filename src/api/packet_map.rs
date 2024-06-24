@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::iter::Map;
 use std::time::{SystemTime, Duration};
+use pnet::packet::arp::ArpOperation;
 use uuid::{uuid, Uuid};
 use chrono::offset::Utc;
 use chrono::{DateTime, Local, TimeZone};
@@ -26,7 +27,8 @@ pub struct PacketMapInfo {
     pub tcp_flags: HashMap<Vec<String>, u64>,
     pub ip_src_port_dsts: HashMap<String, Vec<String>>, // Port scanning
     pub ip_dst_ip_srcs: HashMap<String, Vec<String>>, // DDOS
-    pub ip_dst_and_protocol: HashMap<(String, String), u64> // DOS
+    pub ip_dst_and_protocol: HashMap<(String, String), u64>, // DOS
+    pub arps: HashMap<(String, String), u64> // ipsrc, operation : ipdst, macsrc, macdst
     // stocker dans une struct ip _src ip_dst pour savoir quelle ip bannir
 }
 
@@ -46,6 +48,7 @@ impl PacketMapInfo {
             ip_src_port_dsts: HashMap::new(),
             ip_dst_ip_srcs: HashMap::new(),
             ip_dst_and_protocol: HashMap::new(),
+            arps: HashMap::new(),
         }
     }
     pub fn clear(&mut self) {
@@ -60,12 +63,22 @@ impl PacketMapInfo {
         self.ip_src_port_dsts.clear();
         self.ip_dst_ip_srcs.clear();
         self.ip_dst_and_protocol.clear();
+        self.arps.clear();
     }
 
     pub fn analyze(&mut self) {
         // if self.number_of_packets > 5000 {
         //     println!("DOS ATTACK RECOGNIZED : {}", self.number_of_packets);
         // }
+
+        println!("{:?}", self.arps);
+
+        self.arps.iter().filter(| &((ip_src, operation), counter) | {
+            *counter > 100
+        })
+        .for_each(| ((ip_src, operation), counter) | {
+            println!("ARP FLOODING FROM {} USING {} [{} packets]", ip_src, operation, counter);
+        });
 
         self.ip_srcs.iter().filter(|&(_ip_src, counter)| {
             *counter > 1000
@@ -85,7 +98,8 @@ impl PacketMapInfo {
             ip_srcs.len() > 10
         })
         .for_each(|(ip_dst, ip_srcs)| {
-            println!("DDOS ATTACK RECOGNIZED ON {}\nIP srcs {:?}", ip_dst, ip_srcs);
+            println!("DDOS ATTACK RECOGNIZED ON {} [{} packets]", ip_dst, ip_srcs.len());
+            // println!("DDOS ATTACK RECOGNIZED ON {}\nIP srcs {:?}", ip_dst, ip_srcs);
         });
 
         self.ip_dst_and_protocol.iter().filter(| &((_ip_dst, _protocol), counter) | {
@@ -217,6 +231,13 @@ impl PacketMap {
 
             // layer 3 
             let protocol_3 = packet.get_string_protocol_3();
+            if protocol_3.to_string() == "Arp" {
+                // made in a hurry
+                if let Some((ip_src, ip_dst, hw_src, hw_dst, operation)) = packet.get_layer_3_handler().get_arp_infos() {
+                    *packet_map_infos.arps.entry((ip_src.clone(), operation.to_string()))
+                        .or_insert(0) += 1;
+                }
+            }
             *packet_map_infos.protocols.entry(protocol_3.clone()).or_insert(0) += 1;
             
             let ip_src = if let Some(ip_src) = packet.get_ip_src() {
