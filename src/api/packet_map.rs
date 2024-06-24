@@ -1,19 +1,14 @@
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::iter::Map;
-use std::net::IpAddr;
 use std::time::{SystemTime, Duration};
-use pnet::packet::arp::ArpOperation;
-use uuid::{uuid, Uuid};
+use uuid::Uuid;
 use chrono::offset::Utc;
-use chrono::{DateTime, Local, TimeZone};
+use chrono::{DateTime, Local};
 use std::thread::{self, JoinHandle};
 use std::sync::{Arc, Condvar, Mutex};
 use std::fmt;
-use crate::api::packet_map;
 
-use super::layer_3::{self, EncapsulatedProtocolInfos, Layer3Infos};
-use super::packet_infos::{self, PacketInfos};
+use super::layer_3::EncapsulatedProtocolInfos;
+use super::packet_infos::PacketInfos;
 
 pub struct PacketMapInfo {
     pub ready: bool,
@@ -68,38 +63,36 @@ impl PacketMapInfo {
     }
 
     pub fn analyze(&mut self) {
-        // if self.number_of_packets > 5000 {
-        //     println!("DOS ATTACK RECOGNIZED : {}", self.number_of_packets);
-        // }
 
-        println!("{:?}", self.arps);
+        let datetime = chrono::offset::Local::now().format("[%d-%m-%Y %T]");
 
-        self.arps.iter().filter(| &((ip_src, operation), counter) | {
+        self.arps.iter().filter(| &((_ip_src, _operation), counter) | {
             *counter > 100
         })
         .for_each(| ((ip_src, operation), counter) | {
-            println!("ARP FLOODING FROM {} USING {} [{} packets]", ip_src, operation, counter);
+            println!("{} ARP FLOODING FROM {} USING {} [{} packets]", datetime, ip_src, operation, counter);
         });
 
         self.ip_srcs.iter().filter(|&(_ip_src, counter)| {
             *counter > 1000
         })
         .for_each(|(ip_src, counter)| {
-            println!("HOST {} SENDING A LARGE AMOUNT OF PACKETS [{} packets]", ip_src, counter);
+            println!("{} HOST {} SENDING A LARGE AMOUNT OF PACKETS [{} packets]", datetime, ip_src, counter);
         });
 
         self.ip_src_port_dsts.iter().filter(|&(_ip_src, port_dsts)| {
             port_dsts.len() > 10
         })
         .for_each(|(ip_src, port_dsts)| {
-            println!("PORT SCAN RECOGNIZED FROM {} [{} ports scanned]\n{:?}", ip_src, port_dsts.len(), port_dsts);
+            println!("{} PORT SCAN RECOGNIZED FROM {} [{} ports scanned]", datetime, ip_src, port_dsts.len());
+            // println!("PORT SCAN RECOGNIZED FROM {} [{} ports scanned]\n{:?}", ip_src, port_dsts.len(), port_dsts);
         });
 
         self.ip_dst_ip_srcs.iter().filter(|&(_ip_dst, ip_srcs)| {
             ip_srcs.len() > 10
         })
         .for_each(|(ip_dst, ip_srcs)| {
-            println!("DDOS ATTACK RECOGNIZED ON {} [{} packets]", ip_dst, ip_srcs.len());
+            println!("{} DDOS ATTACK RECOGNIZED ON {} [{} packets]", datetime, ip_dst, ip_srcs.len());
             // println!("DDOS ATTACK RECOGNIZED ON {}\nIP srcs {:?}", ip_dst, ip_srcs);
         });
 
@@ -108,22 +101,22 @@ impl PacketMapInfo {
         })
         .for_each(|((ip_dst, protocol), counter)| {
             match protocol.as_str() {
-                "ICMP" => println!("ICMP FLOODING RECOGNIZED ON {} [{} packets]", ip_dst, counter),
-                "UDP" => println!("UDP DOS ATTACK RECOGNIZED ON {} [{} packets]", ip_dst, counter),
+                "ICMP" => println!("{} ICMP FLOODING RECOGNIZED ON {} [{} packets]", datetime, ip_dst, counter),
+                "UDP" => println!("{} UDP DOS ATTACK RECOGNIZED ON {} [{} packets]", datetime, ip_dst, counter),
                 "TCP" => {
                     self.tcp_flags
                         .iter()
                         .filter(|&(_vec, number)| *number > counter/4 )
                         .for_each(|(flags, number)| {
-                            println!("TCP {} DOS ATTACK RECOGNIZED ON {} [{} packets]", flags.join(", "), ip_dst, number);
+                            println!("{} TCP {} DOS ATTACK RECOGNIZED ON {} [{} packets]", datetime, flags.join(", "), ip_dst, number);
                         });
 
                     // if no match
                     if self.tcp_flags.iter().all(|(_, &number)| number <= counter / 4) {
-                        println!("TCP DOS ATTACKS RECOGNIZED ON {}, UNKOWN METHOD [{} packets]", ip_dst, counter);
+                        println!("{} TCP DOS ATTACKS RECOGNIZED ON {}, UNKOWN METHOD [{} packets]", datetime, ip_dst, counter);
                     }
                 }
-                _ => println!("DOS ATTACK RECOGNIZED ON {} USING {} [{} packets]", ip_dst, protocol, counter),            
+                _ => println!("{} DOS ATTACK RECOGNIZED ON {} USING {} [{} packets]", datetime, ip_dst, protocol, counter),            
             }
         });
 
