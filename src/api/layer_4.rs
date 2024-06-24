@@ -1,7 +1,7 @@
-use pnet::packet::{ip::{IpNextHeaderProtocol, IpNextHeaderProtocols}, tcp::TcpPacket, udp::Udp};
+use pnet::packet::{ip::{IpNextHeaderProtocol, IpNextHeaderProtocols}, tcp::TcpPacket};
 use pnet::packet::udp::UdpPacket;
 use pnet::packet::tcp::TcpFlags;
-use std::{fmt, process, vec};
+use std::{fmt, process};
 
 #[derive(Clone)]
 pub enum Layer4Infos {

@@ -49,9 +49,9 @@ fn main() -> std::io::Result<()> {
 
     println!("default interface {}", default_interface);
 
-    let cleaner_thread = start_cleaner_thread(packet_map.clone(), packet_map_info.clone());
+    let _cleaner_thread = start_cleaner_thread(packet_map.clone(), packet_map_info.clone());
 
-    let analyzer_thread = start_analyzer_thread(packet_map_info.clone());
+    let _analyzer_thread = start_analyzer_thread(packet_map_info.clone());
 
     let (_, mut rx) = match datalink::channel(&default_interface, Default::default()) {
         Ok(Ethernet(tx, rx)) => (tx, rx),
@@ -68,7 +68,7 @@ fn main() -> std::io::Result<()> {
                     let packet_info: PacketInfos = api::packet_infos::PacketInfos::new(&default_interface.name, &ethernet_packet);
                     // println!("{}", packet_info);
                     // println!("PACKET RECEIPT {}", i);
-                    sender.send((packet_info.clone(), i));
+                    let _ = sender.send((packet_info.clone(), i));
                     {
                         let mut packet_map = packet_map.lock().unwrap();
                         packet_map.add_packet(packet_info);

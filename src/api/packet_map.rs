@@ -184,19 +184,19 @@ impl PacketMap {
         self.packets.insert(id, packet.clone());
     }
 
-    pub fn remove_packet(&mut self, uuid: Uuid) {
+    pub fn _remove_packet(&mut self, uuid: Uuid) {
         self.packets.remove(&uuid);
     }
 
     pub fn cleanup_old_packets(&mut self, secs: u64) {
         let now = SystemTime::now();
-        let datetime: DateTime<Utc> = now.into();
-        let datetime = datetime.with_timezone(&Local);
-        println!("Now: {}",  datetime.format("%d/%m/%Y %T") );
+        // let datetime: DateTime<Utc> = now.into();
+        // let _datetime = datetime.with_timezone(&Local);
+        // // println!("Now: {}",  datetime.format("%d/%m/%Y %T") );
         let duration = now - Duration::from_secs(secs);
-        let datetime: DateTime<Utc> = duration.into();
-        let datetime = datetime.with_timezone(&Local);
-        println!("duration: {}", datetime.format("%d/%m/%Y %T"));
+        // let datetime: DateTime<Utc> = duration.into();
+        // let datetime = datetime.with_timezone(&Local);
+        // // println!("duration: {}", datetime.format("%d/%m/%Y %T"));
 
 
         let old_packets: Vec<Uuid> = self.packets.iter()
@@ -310,7 +310,7 @@ impl PacketMap {
         }
     }
 
-    pub fn get_packet(&mut self, uuid: Uuid) -> Option<&PacketInfos> {
+    pub fn _get_packet(&mut self, uuid: Uuid) -> Option<&PacketInfos> {
         self.packets.get(&uuid)
     }
 

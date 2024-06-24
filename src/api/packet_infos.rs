@@ -53,11 +53,11 @@ pub fn process_packet(packet_info: &PacketInfos, config: Arc<AppConfig>){
 
 }
 
-pub fn start_thread_handling_packets(receiver: Arc<Receiver<(PacketInfos, u64)>>, config: Arc<AppConfig> , thread_id: usize){
+pub fn start_thread_handling_packets(receiver: Arc<Receiver<(PacketInfos, u64)>>, config: Arc<AppConfig> , _thread_id: usize){
     
     thread::spawn(move ||{
         loop {
-            if let Ok((packet_info, uuid)) = receiver.recv() {
+            if let Ok((packet_info, _uuid)) = receiver.recv() {
                 process_packet(&packet_info, config.clone());
             } else {
                 thread::sleep(Duration::from_secs(1));

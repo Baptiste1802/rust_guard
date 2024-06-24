@@ -1,6 +1,6 @@
 use crate::api::errors;
 use crate::api::packet_infos::PacketInfos;
-use core::fmt;
+
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, Ipv4Addr};
@@ -136,7 +136,7 @@ impl ArpCache{
                         errors::log_error(&err);
                         return Err(err)
                     } else{
-                        if (arp_handler.operation == ArpOperations::Reply){
+                        if arp_handler.operation == ArpOperations::Reply {
                             match arp_handler.get_ip_src(){
                                 IpAddr::V4(ipv4) => {
                                     let result = self.insert(*ipv4, arp_handler.hw_source);
@@ -144,7 +144,7 @@ impl ArpCache{
                                 }
                                 IpAddr::V6(_) =>{
                                     println!("NetworkError: IP source is not IPv4");
-                                    let err: ArpCacheError = ArpCacheError::InvalidIpSource {
+                                    let _err: ArpCacheError = ArpCacheError::InvalidIpSource {
                                         ip_source: arp_handler.ip_source.to_string(),
                                     };
                                 }

@@ -1,4 +1,4 @@
-use std::{fmt, fs::OpenOptions, io::Write};
+use std::{fs::OpenOptions, io::Write};
 use thiserror::Error;
 use chrono;
 use std::error::Error;
