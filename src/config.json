@@ -1,0 +1,8 @@
+{
+    "whitelist": {
+      "ports" : [80, 443, 53, 8080],
+      "ips" : ["192.168.10.10"]
+    },
+    "honeypot_port": 149,
+    "whitelist_active": false
+}
