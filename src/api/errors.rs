@@ -21,7 +21,7 @@ pub enum ArpCacheError{
         macEther: String,
         macARP: String,
     },
-    #[error("ARP cache -> Duplicated IP or MAC address detected ({ip:?}/{mac:?})")]
+    #[error("ARP cache ->SpoofingAlert, duplicated IP or MAC address detected (({ip:?})({mac:?}))")]
     SpoofingAlert{
         ip: String,
         mac : String,
@@ -43,14 +43,14 @@ pub enum ArpCacheError{
 
 
 pub fn log_error(err : &dyn Error){
-    let date_time = chrono::offset::Local::now();
+    let date_time = chrono::offset::Local::now().format("[%d-%m-%Y %T]");
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open("error_log.txt")
         .expect("Unable to open or create log file");
 
-    let log_entry = format!("[{}] {}\n", date_time, err);
+    let log_entry = format!("{} {}\n", date_time, err);
 
     file .write_all(log_entry.as_bytes()).expect("Unable to write to log file");
 

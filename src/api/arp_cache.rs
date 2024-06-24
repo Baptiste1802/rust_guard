@@ -32,6 +32,7 @@ impl Eq for Entry{}
 impl Hash for Entry{
     fn hash<H: Hasher>(&self, state : &mut H){
         self.ip.hash(state);
+        self.mac.hash(state);
     }
 }
 
@@ -62,6 +63,7 @@ impl ArpCache{
 
     pub fn insert(&mut self, ip : Ipv4Addr, mac: MacAddr) -> Result<(),ArpCacheError>{
         let timestamp = Instant::now();
+        // self.cleanup();
         // let mut error = false;
         let new_entry : Entry = Entry {
             ip,
@@ -69,7 +71,7 @@ impl ArpCache{
             timestamp,
         };
 
-        if self.cache.iter().any(|e| e.ip == new_entry.ip || e.mac == new_entry.mac){
+        if self.cache.iter().any(|e| !(e.eq(&new_entry)) && (e.ip == new_entry.ip || e.mac == new_entry.mac)){
             println!("SpoofingAlert : Duplicated IP or MAC address detected, {}/{}",new_entry.ip, new_entry.mac);
             let err = ArpCacheError::SpoofingAlert{
                 ip : new_entry.ip.to_string(),
@@ -85,11 +87,14 @@ impl ArpCache{
     }
 
     pub fn to_string(&mut self){
+        println!("################");
         for entry in self.cache.iter(){
             println!(
                 "({}) at ({}) on {}", entry.ip.to_string(),entry.mac.to_string(), self.interface_name
             );
         }
+        // println!("{:?}",self.cache);
+        println!("################");
     }
 
     pub fn cleanup(&mut self){
@@ -290,7 +295,7 @@ mod tests{
             let fake_paquet_info : PacketInfos = PacketInfos::new(&interface_name, &ethernet_packet.to_immutable());
             assert_eq!(cache.network_verification(&fake_paquet_info),Ok(()));
 
-            cache.to_string();
+            // cache.to_string();
         }
 
         {

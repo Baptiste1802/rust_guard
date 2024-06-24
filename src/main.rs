@@ -37,7 +37,7 @@ fn start_thread_handling_packets(receiver: Arc<Receiver<(PacketInfos, u64)>> , t
 }
 
 fn main() -> std::io::Result<()> {
-
+    
     let packet_map_info = Arc::new((Mutex::new(api::packet_map::PacketMapInfo::new()), Condvar::new()));
     let packet_map = Arc::new(Mutex::new(api::packet_map::PacketMap::new()));
 
@@ -78,6 +78,7 @@ fn main() -> std::io::Result<()> {
         Ok(_) => panic!("Unhandled channel type: {}", &default_interface),
         Err(e) => panic!("An error occured when creating the datalink channel: {}", e)
     };
+    let mut cache_arp = ArpCache::new(Duration::new(600, 0),default_interface);
 
     println!("Start reading packet on iface {}.", default_interface.name);
     let mut i: u64 = 0;
@@ -86,8 +87,8 @@ fn main() -> std::io::Result<()> {
             Ok(packet) => {
                 if let Some(ethernet_packet) = EthernetPacket::new(packet) {
                     let packet_info: PacketInfos = api::packet_infos::PacketInfos::new(&default_interface.name, &ethernet_packet);
-                    let mut cache_arp = ArpCache::new(Duration::new(10, 0),default_interface);
                     cache_arp.network_verification(&packet_info);
+                    
                     // println!("{}", packet_info);
                     // println!("PACKET RECEIPT {}", i);
                     sender.send((packet_info.clone(), i));
