@@ -1,6 +1,6 @@
 use crate::api::errors;
 use crate::api::packet_infos::PacketInfos;
-use core::fmt;
+
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, Ipv4Addr};

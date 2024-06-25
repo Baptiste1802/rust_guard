@@ -1,16 +1,70 @@
 use crate::api::layer_3::*;
 use crate::api::layer_4::*;
+use crate::api::config::AppConfig;
+use crossbeam::channel::Receiver;
 use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::transport::icmp_packet_iter;
 use pnet::util::MacAddr;
 use pnet::packet::{
     ethernet::{EthernetPacket, EtherTypes},
     Packet,
 };
 use std::net::IpAddr;
+use std::sync::Arc;
+use std::thread;
 use std::time::SystemTime;
 use chrono::offset::Utc;
-use chrono::{DateTime, Local, TimeZone};
+use std::time::Duration;
+use chrono::{DateTime, Local};
+
+
+pub fn process_packet(packet_info: &PacketInfos, config: Arc<AppConfig>){
+
+    // todo 
+
+    let datetime: DateTime<Utc> = packet_info.received_time.into();
+    let datetime = datetime.with_timezone(&Local).format("[%d-%m-%Y %T]");
+
+    let layer_3_handler = packet_info.get_layer_3_handler();
+
+    if let Some(ttl) = layer_3_handler.get_ttl() {
+        if *ttl < 20 {
+            println!("{} Potential traceroute (low TTL) [{}]", datetime, ttl);
+        }
+        else if *ttl >= 208 {
+            println!("{} Time-To-Live (TTL) abnormaly high [{}]", datetime, ttl)
+        }
+    }
+
+    if let Some(port) = packet_info.get_port_dst() {
+        let port_number: Result<u16, _> = port.parse();
+
+        match port_number {
+            Ok(port) => {
+                if port == config.get_honeypot_port() {
+                    println!("{} HoneyPot triggered [{}]", datetime, port);
+                }
+                if config.is_whitelist_active() && !config.get_whitelisted_ports().contains(&port) {
+                    println!("{} Not whitelisted port triggered [{}]", datetime, port);
+                }
+            }, 
+            Err(_err) => {}
+        }
+    }
+
+}
+
+pub fn start_thread_handling_packets(receiver: Arc<Receiver<(PacketInfos, u64)>>, config: Arc<AppConfig> , _thread_id: usize){
+    
+    thread::spawn(move ||{
+        loop {
+            if let Ok((packet_info, _uuid)) = receiver.recv() {
+                process_packet(&packet_info, config.clone());
+            } else {
+                thread::sleep(Duration::from_secs(1));
+            }
+        }
+    });
+}
 
 
 #[derive(Clone)]
@@ -86,11 +140,11 @@ impl PacketInfos {
         &self.layer_3_infos
     }
 
-    pub fn get_ip_src(&self) -> Option<&IpAddr> {
+    pub fn _get_ip_src(&self) -> Option<&IpAddr> {
         self.layer_3_infos.get_ip_src()
     }
 
-    pub fn get_ip_dst(&self) -> Option<&IpAddr> {
+    pub fn _get_ip_dst(&self) -> Option<&IpAddr> {
         self.layer_3_infos.get_ip_dst()
     }
 
@@ -132,7 +186,6 @@ impl PacketInfos {
 }
 
 use std::fmt;
-
 
 impl fmt::Display for PacketInfos {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

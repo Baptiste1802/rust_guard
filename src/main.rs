@@ -1,43 +1,24 @@
 mod api;
 use api::arp_cache::ArpCache;
-use api::packet_infos::PacketInfos;
+use api::packet_infos::{PacketInfos, start_thread_handling_packets};
+use api::config::load_config;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::{self, interfaces};
-use pnet::packet::arp::{ArpOperations, ArpPacket};
-use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-use pnet::packet::ipv4::Ipv4Packet;
-use pnet::packet::tcp::TcpPacket;
-use pnet::packet::{self, Packet};
-use uuid::Uuid;
-use std::thread::sleep;
-use std::time::Duration;
-use std::thread;
+use pnet::packet::ethernet::EthernetPacket;
 use std::sync::{Arc, Mutex, Condvar};
 use crossbeam::channel::{unbounded, Sender, Receiver};
 
-use crate::api::packet_map::{self, start_cleaner_thread, start_analyzer_thread};
+use crate::api::packet_map::{start_cleaner_thread, start_analyzer_thread};
 
-fn process_packet(packet_info: &PacketInfos){
-    thread::sleep(Duration::from_micros(10000));    
-}
 
-fn start_thread_handling_packets(receiver: Arc<Receiver<(PacketInfos, u64)>> , thread_id: usize){
-    
-    thread::spawn(move ||{
-        loop {
-            if let Ok((packet_info, uuid)) = receiver.recv() {
-                process_packet(&packet_info);
-            } else {
-                thread::sleep(Duration::from_secs(1));
-            }
-        }
-    });
-    
-
-}
 
 fn main() -> std::io::Result<()> {
-    
+
+    let app_config = Arc::new(load_config("./src/config.json"));
+
+    println!("IP Whitelisted {:?}\nPorts Whitelisted {:?}\nHoneyPot Port{}", app_config.get_whitelisted_ips(), app_config.get_whitelisted_ports() ,app_config.get_honeypot_port());
+
+
     let packet_map_info = Arc::new((Mutex::new(api::packet_map::PacketMapInfo::new()), Condvar::new()));
     let packet_map = Arc::new(Mutex::new(api::packet_map::PacketMap::new()));
 
@@ -47,7 +28,7 @@ fn main() -> std::io::Result<()> {
 
     for thread_id in 0..cpus {
         let receiver = receiver.clone();
-        start_thread_handling_packets(receiver, thread_id)
+        start_thread_handling_packets(receiver, app_config.clone(), thread_id)
     }
 
     // return a vector with all newtork interfaces found
@@ -69,9 +50,9 @@ fn main() -> std::io::Result<()> {
 
     println!("default interface {}", default_interface);
 
-    let cleaner_thread = start_cleaner_thread(packet_map.clone(), packet_map_info.clone());
+    let _cleaner_thread = start_cleaner_thread(packet_map.clone(), packet_map_info.clone());
 
-    let analyzer_thread = start_analyzer_thread(packet_map_info.clone());
+    let _analyzer_thread = start_analyzer_thread(packet_map_info.clone());
 
     let (_, mut rx) = match datalink::channel(&default_interface, Default::default()) {
         Ok(Ethernet(tx, rx)) => (tx, rx),
@@ -91,7 +72,7 @@ fn main() -> std::io::Result<()> {
                     
                     // println!("{}", packet_info);
                     // println!("PACKET RECEIPT {}", i);
-                    sender.send((packet_info.clone(), i));
+                    let _ = sender.send((packet_info.clone(), i));
                     {
                         let mut packet_map = packet_map.lock().unwrap();
                         packet_map.add_packet(packet_info);

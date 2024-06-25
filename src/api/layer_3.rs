@@ -1,9 +1,9 @@
 use pnet::packet::{
-    arp::{Arp, ArpOperation, ArpOperations, ArpPacket}, ethernet::{EtherTypes, EthernetPacket}, ip::{IpNextHeaderProtocol, IpNextHeaderProtocols}, ipv4::{self, Ipv4Packet}, ipv6::Ipv6Packet, Packet
+    arp::{ArpOperation, ArpOperations, ArpPacket}, ip::{IpNextHeaderProtocol, IpNextHeaderProtocols}, ipv4::{Ipv4Packet}, ipv6::Ipv6Packet, Packet
 };
-use pnet::packet::icmp::{Icmp, IcmpCode, IcmpPacket, IcmpType};
+use pnet::packet::icmp::{IcmpCode, IcmpPacket, IcmpType};
 use pnet::util::MacAddr;
-use std::{fmt, net::{IpAddr, Ipv4Addr, Ipv6Addr}, process};
+use std::{fmt, net::IpAddr, process};
 
 #[derive(Clone)]
 pub enum Layer3Infos {
@@ -73,6 +73,15 @@ impl Layer3Infos {
             _ => None,
         }
     }
+
+    pub fn get_ttl(&self) -> Option<&u8> {
+        match self {
+            Layer3Infos::IPV4(ipv4_handler) => ipv4_handler.get_ttl(),
+            Layer3Infos::IPV6(ipv6_handler) => ipv6_handler.get_ttl(),
+            _ => None,
+        }
+    }
+
 }
 
 impl fmt::Display for Layer3Infos {
@@ -107,6 +116,7 @@ pub trait GetInformations {
     fn get_ip_src(&self) -> &IpAddr;
     fn get_next_protocol(&self) -> Option<IpNextHeaderProtocol>;
     fn get_encapsulated_infos(&self) -> Option<&EncapsulatedProtocolInfos>;
+    fn get_ttl(&self) -> Option<&u8>;
 }
 
 
@@ -116,6 +126,7 @@ pub struct Ipv4Handler {
     ip_destination: IpAddr,
     next_protocol: IpNextHeaderProtocol,
     encapsulated_packet: Option<EncapsulatedProtocolInfos>,
+    ttl: u8,
 }
 
 impl HandlePacket for Ipv4Handler {
@@ -131,7 +142,8 @@ impl HandlePacket for Ipv4Handler {
             ip_source: IpAddr::V4(ipv4_packet.get_source()),
             ip_destination: IpAddr::V4(ipv4_packet.get_destination()),
             next_protocol: protocol,
-            encapsulated_packet: extract_encapsalted_protocol(protocol, data)
+            encapsulated_packet: extract_encapsalted_protocol(protocol, data),
+            ttl: ipv4_packet.get_ttl(),
         });
         (Some(ipv4_packet.payload().to_vec()), layer_3_infos)
     }
@@ -153,7 +165,7 @@ impl GetInformations for Ipv4Handler {
         Some(self.next_protocol)
     }
 
-    fn get_encapsulated_infos(&self) -> Option<(&EncapsulatedProtocolInfos)> {
+    fn get_encapsulated_infos(&self) -> Option<&EncapsulatedProtocolInfos> {
         match self.next_protocol {
             IpNextHeaderProtocols::Icmp => {
                 if let Some(encapsulated_packet) = self.encapsulated_packet.as_ref() {
@@ -164,13 +176,18 @@ impl GetInformations for Ipv4Handler {
             _ => None
         }
     }
+
+    fn get_ttl(&self) -> Option<&u8> {
+        Some(&self.ttl)
+    }
 }
 
 #[derive(Clone)]
 pub struct Ipv6Handler {
     ip_source: IpAddr,
     ip_destination: IpAddr,
-    next_protocol: IpNextHeaderProtocol
+    next_protocol: IpNextHeaderProtocol,
+    ttl: u8,
 }
 
 impl HandlePacket for Ipv6Handler {
@@ -183,7 +200,8 @@ impl HandlePacket for Ipv6Handler {
         let layer_3_infos = Layer3Infos::IPV6(Ipv6Handler {
             ip_source: IpAddr::V6(ipv6_packet.get_source()),
             ip_destination: IpAddr::V6(ipv6_packet.get_destination()),
-            next_protocol: ipv6_packet.get_next_header()
+            next_protocol: ipv6_packet.get_next_header(),
+            ttl: ipv6_packet.get_hop_limit(),
         });
 
         (Some(ipv6_packet.payload().to_vec()), layer_3_infos)
@@ -206,6 +224,10 @@ impl GetInformations for Ipv6Handler {
     
     fn get_encapsulated_infos(&self) -> Option<&EncapsulatedProtocolInfos> {
         None
+    }
+
+    fn get_ttl(&self) -> Option<&u8> {
+        Some(&self.ttl)
     }
 }
 
@@ -265,6 +287,10 @@ impl GetInformations for ArpHandler {
     }
 
     fn get_next_protocol(&self) -> Option<IpNextHeaderProtocol> {
+        None
+    }
+
+    fn get_ttl(&self) -> Option<&u8> {
         None
     }
 }
