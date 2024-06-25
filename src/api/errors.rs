@@ -51,7 +51,7 @@ pub fn log_error(err : &dyn Error){
         .expect("Unable to open or create log file");
 
     let log_entry = format!("{} {}\n", date_time, err);
-
+    println!("{}",log_entry);
     file .write_all(log_entry.as_bytes()).expect("Unable to write to log file");
 
 

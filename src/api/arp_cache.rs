@@ -72,7 +72,6 @@ impl ArpCache{
         };
 
         if self.cache.iter().any(|e| !(e.eq(&new_entry)) && (e.ip == new_entry.ip || e.mac == new_entry.mac)){
-            println!("SpoofingAlert : Duplicated IP or MAC address detected, {}/{}",new_entry.ip, new_entry.mac);
             let err = ArpCacheError::SpoofingAlert{
                 ip : new_entry.ip.to_string(),
                 mac: new_entry.mac.to_string(),
@@ -127,25 +126,21 @@ impl ArpCache{
                 if let IpAddr::V4(ip_source) = arp_handler.get_ip_src() {
 
                     if ip_source.is_broadcast() || arp_handler.ip_source.is_loopback(){
-                        println!("NetworkError : invalid ip");
                         let err = ArpCacheError::InvalidIpSource { ip_source: arp_handler.ip_source.to_string() };
                         errors::log_error(&err);
                         return Err(err)
                     }
                     else if !(ip_network.contains(*ip_source)){
-                        println!("NetworkError : handler not in subnet");
                         let err = ArpCacheError::SubnetError { ip: arp_handler.ip_source.to_string() };
                         errors::log_error(&err);
                         return Err(err)
                     }
                     else if (arp_handler.operation == ArpOperations::Request) && (arp_handler.hw_source.is_broadcast()){
-                        println!("NetworkError : Mac address source cannot be broadcast address");
                         let err = ArpCacheError::HwBroadError { mac: arp_handler.hw_source.to_string()};
                         errors::log_error(&err);
                         return Err(err)
                     }
                     else if !(arp_handler.hw_source.eq(packet.get_mac_source())){
-                        println!("NetworkError : Mac in Ethernet packet not equal to Mac in ARP packet");
                         let err = ArpCacheError::HwEtherArpError { macEther: packet.get_mac_source().to_string(), macARP: arp_handler.hw_source.to_string() };
                         errors::log_error(&err);
                         return Err(err)
@@ -156,7 +151,6 @@ impl ArpCache{
                                 return result
                             }
                             IpAddr::V6(_) =>{
-                                println!("NetworkError: IP source is not IPv4");
                                 let err: ArpCacheError = ArpCacheError::InvalidIpSource {
                                     ip_source: arp_handler.ip_source.to_string(),
                                 };
@@ -166,7 +160,6 @@ impl ArpCache{
                     }
 
                 } else {
-                    println!("NetworkError: IP source is not IPv4");
                     let err = ArpCacheError::InvalidIpSource {
                         ip_source: arp_handler.ip_source.to_string(),
                     };

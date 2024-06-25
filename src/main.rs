@@ -4,6 +4,7 @@ use api::packet_infos::{PacketInfos, start_thread_handling_packets};
 use api::config::load_config;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::{self, interfaces};
+use std::time::Duration;
 use pnet::packet::ethernet::EthernetPacket;
 use std::sync::{Arc, Mutex, Condvar};
 use crossbeam::channel::{unbounded, Sender, Receiver};
